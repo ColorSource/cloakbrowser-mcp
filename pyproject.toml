@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cloakbrowser-mcp"
+version = "0.1.0"
+description = "MCP server for CloakBrowser stealth Chromium automation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "CloakBrowser MCP maintainers" }
+]
+keywords = [
+  "mcp",
+  "model-context-protocol",
+  "cloakbrowser",
+  "browser-automation",
+  "playwright",
+  "stealth-browser",
+  "ai-agent"
+]
+dependencies = [
+  "cloakbrowser[geoip,serve]>=0.3.31",
+  "mcp[cli]>=1.13.0",
+  "pydantic>=2.8",
+  "python-dotenv>=1.0",
+  "httpx[socks]>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.8",
+]
+patchright = [
+  "cloakbrowser[patchright]>=0.3.31",
+]
+
+[project.scripts]
+cloakbrowser-mcp = "cloakbrowser_mcp.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/CloakHQ/CloakBrowser"
+Upstream = "https://github.com/CloakHQ/CloakBrowser"
+Issues = "https://github.com/CloakHQ/CloakBrowser/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cloakbrowser_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "browser: launches CloakBrowser and may download browser binaries",
+  "docker: builds or runs Docker containers",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008", "E501"]

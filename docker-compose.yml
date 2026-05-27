@@ -1,0 +1,27 @@
+services:
+  cloakbrowser-mcp:
+    build: .
+    image: cloakbrowser-mcp:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLOAKBROWSER_MCP_TRANSPORT: streamable-http
+      CLOAKBROWSER_MCP_HOST: 0.0.0.0
+      CLOAKBROWSER_MCP_PORT: "8000"
+      CLOAKBROWSER_MCP_PATH: /mcp
+      CLOAKBROWSER_MCP_PROFILE_ROOT: /profiles
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - cloakbrowser_profiles:/profiles
+    healthcheck:
+      test: ["CMD", "cloakbrowser-mcp", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  cloakbrowser_profiles:

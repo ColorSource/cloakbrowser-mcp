@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "cloakbrowser": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["cloakbrowser-mcp"],
+      "env": {
+        "CLOAKBROWSER_MCP_HEADLESS": "true"
+      }
+    }
+  }
+}

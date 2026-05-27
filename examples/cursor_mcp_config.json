@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "cloakbrowser": {
+      "command": "uvx",
+      "args": ["cloakbrowser-mcp"],
+      "env": {
+        "CLOAKBROWSER_MCP_HEADLESS": "true",
+        "CLOAKBROWSER_MCP_TIMEOUT_MS": "30000"
+      }
+    }
+  }
+}
