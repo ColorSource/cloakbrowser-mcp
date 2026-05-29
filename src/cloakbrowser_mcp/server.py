@@ -29,6 +29,7 @@ def _build_lifespan(
 
     @asynccontextmanager
     async def lifespan(_server: FastMCP) -> AsyncIterator[None]:
+        await manager.start_reaper()
         try:
             yield
         finally:

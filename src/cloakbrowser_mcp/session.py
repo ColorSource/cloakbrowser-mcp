@@ -34,7 +34,12 @@ class BrowserSession:
     pages: dict[str, Any] = field(default_factory=dict)
     active_page_id: str | None = None
     page_seq: int = field(default=0, repr=False)
+    last_activity: float = field(default_factory=time.monotonic, repr=False)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
+
+    def touch(self) -> None:
+        """更新最近活动时间，供空闲会话回收判断。"""
+        self.last_activity = time.monotonic()
 
     def register_page(self, page: Any) -> str:
         # 幂等：context "page" 事件与显式 new_page 可能注册同一个 Page 对象。

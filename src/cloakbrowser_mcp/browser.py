@@ -77,9 +77,18 @@ class BrowserSessionManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.sessions: dict[str, BrowserSession] = {}
+        self._reaper_task: asyncio.Task[None] | None = None
 
     async def launch_session(self, options: LaunchOptions | None = None) -> dict[str, Any]:
         opts = options or LaunchOptions()
+        max_sessions = self.settings.runtime.max_sessions
+        if max_sessions and len(self.sessions) >= max_sessions:
+            raise ToolFailure(
+                "SESSION_LIMIT_REACHED",
+                f"已达到最大会话数 {max_sessions}。",
+                "先用 browser_close 关闭不再使用的会话，或调高 CLOAKBROWSER_MCP_MAX_SESSIONS。",
+                {"max_sessions": max_sessions, "open": len(self.sessions)},
+            )
         mode = self._value(opts.mode, self.settings.browser.launch_mode)
         if self._value(opts.persistent_session, self.settings.browser.persistent_session):
             mode = "persistent"
@@ -196,8 +205,33 @@ class BrowserSessionManager:
         return {"sessions": [session.summary() for session in self.sessions.values()]}
 
     async def shutdown(self) -> None:
-        """服务关闭时调用：统一关闭全部会话，避免残留 Chromium 进程。"""
+        """服务关闭时调用：停止回收任务并统一关闭全部会话，避免残留 Chromium 进程。"""
+        if self._reaper_task is not None:
+            self._reaper_task.cancel()
+            try:
+                await self._reaper_task
+            except asyncio.CancelledError:
+                pass
+            self._reaper_task = None
         await self.close_session()
+
+    async def start_reaper(self) -> None:
+        """按 session_idle_timeout_seconds 启动空闲会话回收后台任务（>0 才启用）。"""
+        timeout = self.settings.runtime.session_idle_timeout_seconds
+        if timeout and timeout > 0 and self._reaper_task is None:
+            self._reaper_task = asyncio.create_task(self._reap_loop(timeout))
+
+    async def _reap_loop(self, timeout: float) -> None:
+        interval = max(5.0, min(timeout / 2, 60.0))
+        while True:
+            await asyncio.sleep(interval)
+            await self._reap_idle(timeout)
+
+    async def _reap_idle(self, timeout: float) -> None:
+        now = time.monotonic()
+        stale = [sid for sid, s in self.sessions.items() if now - s.last_activity > timeout]
+        for sid in stale:
+            await self.close_session(sid)
 
     async def new_page(self, session_id: str) -> dict[str, Any]:
         async with self._use_session(session_id) as session:
@@ -245,6 +279,7 @@ class BrowserSessionManager:
         """在会话锁内执行 context 级操作（new_page/cookies/storage 等），串行化同一会话。"""
         session = self._session(session_id)
         async with session.lock:
+            session.touch()
             yield session
 
     @asynccontextmanager
@@ -252,6 +287,7 @@ class BrowserSessionManager:
         """在会话锁内解析并操作页面。Playwright Page 非并发安全，需串行化。"""
         session = self._session(session_id)
         async with session.lock:
+            session.touch()
             try:
                 _, page = session.get_page(page_id)
             except KeyError as exc:

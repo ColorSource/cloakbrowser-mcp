@@ -72,6 +72,8 @@ class CdpSettings(BaseModel):
 class RuntimeSettings(BaseModel):
     timeout_ms: int = 30000
     retries: int = 0
+    max_sessions: int = 0  # 0 = 不限制并发会话数
+    session_idle_timeout_seconds: float = 0.0  # 0 = 不自动回收空闲会话
     install_browser_on_start: bool = False
     healthcheck_probe_browser: bool = False
     check_docker: bool = False
@@ -127,6 +129,8 @@ ENV_MAP: dict[str, tuple[str, ...]] = {
     "CLOAKBROWSER_MCP_CDP_TIMEOUT_SECONDS": ("cdp", "timeout_seconds"),
     "CLOAKBROWSER_MCP_TIMEOUT_MS": ("runtime", "timeout_ms"),
     "CLOAKBROWSER_MCP_RETRIES": ("runtime", "retries"),
+    "CLOAKBROWSER_MCP_MAX_SESSIONS": ("runtime", "max_sessions"),
+    "CLOAKBROWSER_MCP_SESSION_IDLE_TIMEOUT_SECONDS": ("runtime", "session_idle_timeout_seconds"),
     "CLOAKBROWSER_MCP_INSTALL_BROWSER_ON_START": ("runtime", "install_browser_on_start"),
     "CLOAKBROWSER_MCP_HEALTHCHECK_PROBE_BROWSER": ("runtime", "healthcheck_probe_browser"),
     "CLOAKBROWSER_MCP_CHECK_DOCKER": ("runtime", "check_docker"),
