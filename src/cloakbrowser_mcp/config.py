@@ -51,6 +51,7 @@ class BrowserSettings(BaseModel):
     viewport: dict[str, int] | None = None
     no_viewport: bool = False
     color_scheme: Literal["light", "dark", "no-preference"] | None = None
+    storage_state: str | dict[str, Any] | None = None
     context_kwargs: dict[str, Any] = Field(default_factory=dict)
     launch_kwargs: dict[str, Any] = Field(default_factory=dict)
 
@@ -122,6 +123,7 @@ ENV_MAP: dict[str, tuple[str, ...]] = {
     "CLOAKBROWSER_MCP_VIEWPORT": ("browser", "viewport"),
     "CLOAKBROWSER_MCP_NO_VIEWPORT": ("browser", "no_viewport"),
     "CLOAKBROWSER_MCP_COLOR_SCHEME": ("browser", "color_scheme"),
+    "CLOAKBROWSER_MCP_STORAGE_STATE": ("browser", "storage_state"),
     "CLOAKBROWSER_MCP_CONTEXT_KWARGS": ("browser", "context_kwargs"),
     "CLOAKBROWSER_MCP_LAUNCH_KWARGS": ("browser", "launch_kwargs"),
     "CLOAKBROWSER_MCP_CDP_HOST": ("cdp", "host"),

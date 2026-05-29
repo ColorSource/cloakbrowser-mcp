@@ -96,6 +96,7 @@
 - `viewport`
 - `no_viewport`
 - `color_scheme`
+- `storage_state`：storage_state JSON 文件路径或对象，启动时恢复 cookie + localStorage（仅 `browser`/`context` 模式；`persistent` 由 profile 目录维护，会忽略此项）。
 - `context_kwargs`
 - `launch_kwargs`
 

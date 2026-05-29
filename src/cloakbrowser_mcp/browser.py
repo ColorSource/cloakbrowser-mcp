@@ -46,6 +46,7 @@ class LaunchOptions(BaseModel):
     viewport: dict[str, int] | None = None
     no_viewport: bool | None = None
     color_scheme: Literal["light", "dark", "no-preference"] | None = None
+    storage_state: str | dict[str, Any] | None = None
     context_kwargs: dict[str, Any] | None = None
     launch_kwargs: dict[str, Any] | None = None
 
@@ -97,6 +98,10 @@ class BrowserSessionManager:
         context_kwargs = self._build_context_kwargs(opts)
         launch_kwargs = self._value(opts.launch_kwargs, self.settings.browser.launch_kwargs) or {}
         profile_dir: str | None = None
+
+        if mode == "persistent":
+            # 持久 context 自带 profile 状态，不接受 storage_state 参数。
+            context_kwargs.pop("storage_state", None)
 
         try:
             if mode == "browser":
@@ -755,6 +760,15 @@ class BrowserSessionManager:
         color_scheme = self._value(opts.color_scheme, settings.color_scheme)
         if color_scheme:
             context_kwargs["color_scheme"] = color_scheme
+
+        storage_state = self._value(opts.storage_state, settings.storage_state)
+        if storage_state:
+            # 字符串视为 storage_state JSON 文件路径，dict 直接传入；恢复 cookie + localStorage。
+            context_kwargs["storage_state"] = (
+                str(Path(storage_state).expanduser())
+                if isinstance(storage_state, str)
+                else storage_state
+            )
 
         geolocation = self._value(opts.geolocation, settings.geolocation)
         if geolocation and {"latitude", "longitude"}.issubset(geolocation):
