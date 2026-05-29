@@ -37,6 +37,9 @@ TOOL_DEFINITIONS: list[dict[str, str]] = [
     {"name": "browser_go_back", "description": "后退到浏览器历史上一页。"},
     {"name": "browser_go_forward", "description": "前进到浏览器历史下一页。"},
     {"name": "browser_wait_for_selector", "description": "等待元素达到 visible/hidden/attached/detached 状态。"},
+    {"name": "browser_wait_for_load_state", "description": "等待页面达到 load/domcontentloaded/networkidle。"},
+    {"name": "browser_wait_for_url", "description": "等待页面 URL 匹配 glob/字符串模式。"},
+    {"name": "browser_wait_for_timeout", "description": "固定等待若干毫秒（仅在必要时使用）。"},
     {"name": "browser_evaluate", "description": "在页面中执行 JavaScript 并返回 JSON 可序列化结果。"},
     {"name": "browser_get_text", "description": "读取 body 或指定 selector 的可见文本。"},
     {"name": "browser_get_html", "description": "读取当前页面 HTML。"},
@@ -331,6 +334,44 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
                     timeout_ms,
                 )
             )
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_wait_for_load_state(
+        session_id: str,
+        state: str = "load",
+        page_id: str | None = None,
+        timeout_ms: int | None = None,
+    ) -> dict[str, Any]:
+        """等待页面 load/domcontentloaded/networkidle。"""
+        try:
+            return ok(await manager.wait_for_load_state(session_id, state, page_id, timeout_ms))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_wait_for_url(
+        session_id: str,
+        url: str,
+        page_id: str | None = None,
+        timeout_ms: int | None = None,
+    ) -> dict[str, Any]:
+        """等待 URL 匹配指定模式。"""
+        try:
+            return ok(await manager.wait_for_url(session_id, url, page_id, timeout_ms))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_wait_for_timeout(
+        session_id: str,
+        timeout_ms: int,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        """固定等待若干毫秒。"""
+        try:
+            return ok(await manager.wait_for_timeout(session_id, timeout_ms, page_id))
         except Exception as exc:
             return fail_from_exception(exc)
 

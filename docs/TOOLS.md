@@ -257,6 +257,36 @@
 - `state`：`attached`、`detached`、`visible`、`hidden`。
 - `timeout_ms`：可选。
 
+### `browser_wait_for_load_state`
+
+参数：
+
+- `session_id`
+- `state`：`load`、`domcontentloaded`、`networkidle`。默认 `load`。
+- `page_id`：可选。
+- `timeout_ms`：可选。
+
+用于等待跳转或异步加载稳定，常配合 `browser_click` 后使用。
+
+### `browser_wait_for_url`
+
+参数：
+
+- `session_id`
+- `url`：glob 模式或字符串，例如 `**/dashboard`。
+- `page_id`：可选。
+- `timeout_ms`：可选。
+
+### `browser_wait_for_timeout`
+
+参数：
+
+- `session_id`
+- `timeout_ms`：固定等待毫秒数。
+- `page_id`：可选。
+
+仅在没有可靠的元素/状态信号时使用；优先用 `browser_wait_for_selector` 或 `browser_wait_for_load_state`。
+
 ### `browser_evaluate`
 
 参数：

@@ -384,6 +384,45 @@ class BrowserSessionManager:
             )
             return {"selector": selector, "state": state, "found": handle is not None}
 
+    async def wait_for_load_state(
+        self,
+        session_id: str,
+        state: str = "load",
+        page_id: str | None = None,
+        timeout_ms: int | None = None,
+    ) -> dict[str, Any]:
+        if state not in {"load", "domcontentloaded", "networkidle"}:
+            raise ToolFailure(
+                "INVALID_LOAD_STATE",
+                f"不支持的 load state: {state}",
+                "state 只能是 load、domcontentloaded 或 networkidle。",
+                {"state": state},
+            )
+        async with self._use_page(session_id, page_id) as page:
+            await page.wait_for_load_state(state, timeout=timeout_ms or self.settings.runtime.timeout_ms)
+            return {"state": state, "url": page.url}
+
+    async def wait_for_url(
+        self,
+        session_id: str,
+        url: str,
+        page_id: str | None = None,
+        timeout_ms: int | None = None,
+    ) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            await page.wait_for_url(url, timeout=timeout_ms or self.settings.runtime.timeout_ms)
+            return {"url": page.url, "title": await page.title()}
+
+    async def wait_for_timeout(
+        self,
+        session_id: str,
+        timeout_ms: int,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            await page.wait_for_timeout(timeout_ms)
+            return {"waited_ms": timeout_ms}
+
     async def evaluate(
         self,
         session_id: str,
