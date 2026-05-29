@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -18,6 +19,7 @@ class BrowserSession:
     cdp_url: str | None = None
     pages: dict[str, Any] = field(default_factory=dict)
     active_page_id: str | None = None
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
 
     def register_page(self, page: Any) -> str:
         page_id = f"page-{len(self.pages) + 1}"

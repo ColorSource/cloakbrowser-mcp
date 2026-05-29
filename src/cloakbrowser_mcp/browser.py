@@ -8,7 +8,8 @@ import json
 import socket
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
@@ -171,7 +172,8 @@ class BrowserSessionManager:
             session = self.sessions.pop(sid, None)
             if not session:
                 continue
-            await session.close()
+            async with session.lock:
+                await session.close()
             closed.append(sid)
         return {"closed": closed, "remaining": list(self.sessions)}
 
@@ -183,10 +185,33 @@ class BrowserSessionManager:
         await self.close_session()
 
     async def new_page(self, session_id: str) -> dict[str, Any]:
+        async with self._use_session(session_id) as session:
+            page = await session.context.new_page()
+            page_id = session.register_page(page)
+            return {"session_id": session_id, "page_id": page_id, "pages": list(session.pages)}
+
+    @asynccontextmanager
+    async def _use_session(self, session_id: str) -> AsyncIterator[BrowserSession]:
+        """在会话锁内执行 context 级操作（new_page/cookies/storage 等），串行化同一会话。"""
         session = self._session(session_id)
-        page = await session.context.new_page()
-        page_id = session.register_page(page)
-        return {"session_id": session_id, "page_id": page_id, "pages": list(session.pages)}
+        async with session.lock:
+            yield session
+
+    @asynccontextmanager
+    async def _use_page(self, session_id: str, page_id: str | None) -> AsyncIterator[Any]:
+        """在会话锁内解析并操作页面。Playwright Page 非并发安全，需串行化。"""
+        session = self._session(session_id)
+        async with session.lock:
+            try:
+                _, page = session.get_page(page_id)
+            except KeyError as exc:
+                raise ToolFailure(
+                    "PAGE_NOT_FOUND",
+                    str(exc),
+                    "先调用 browser_new_page，或省略 page_id 使用当前活动页面。",
+                    {"session_id": session_id, "page_id": page_id},
+                ) from exc
+            yield page
 
     async def _retry(self, func: Callable[[], Awaitable[Any]]) -> Any:
         """对易抖动的导航类操作做重试。重试次数取 runtime.retries（0 表示只尝试一次）。"""
@@ -210,23 +235,23 @@ class BrowserSessionManager:
         page_id: str | None = None,
         options: NavigateOptions | None = None,
     ) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
         opts = options or NavigateOptions()
         timeout = opts.timeout_ms or self.settings.runtime.timeout_ms
-        response = await self._retry(
-            lambda: page.goto(url, wait_until=opts.wait_until, timeout=timeout, referer=opts.referer)
-        )
-        return {
-            "url": page.url,
-            "title": await page.title(),
-            "status": response.status if response else None,
-            "ok": response.ok if response else None,
-        }
+        async with self._use_page(session_id, page_id) as page:
+            response = await self._retry(
+                lambda: page.goto(url, wait_until=opts.wait_until, timeout=timeout, referer=opts.referer)
+            )
+            return {
+                "url": page.url,
+                "title": await page.title(),
+                "status": response.status if response else None,
+                "ok": response.ok if response else None,
+            }
 
     async def click(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        await page.click(selector, timeout=self.settings.runtime.timeout_ms)
-        return {"clicked": selector}
+        async with self._use_page(session_id, page_id) as page:
+            await page.click(selector, timeout=self.settings.runtime.timeout_ms)
+            return {"clicked": selector}
 
     async def fill(
         self,
@@ -235,9 +260,9 @@ class BrowserSessionManager:
         value: str,
         page_id: str | None = None,
     ) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        await page.fill(selector, value, timeout=self.settings.runtime.timeout_ms)
-        return {"filled": selector}
+        async with self._use_page(session_id, page_id) as page:
+            await page.fill(selector, value, timeout=self.settings.runtime.timeout_ms)
+            return {"filled": selector}
 
     async def type_text(
         self,
@@ -247,9 +272,9 @@ class BrowserSessionManager:
         page_id: str | None = None,
         delay_ms: int | None = None,
     ) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        await page.type(selector, text, delay=delay_ms, timeout=self.settings.runtime.timeout_ms)
-        return {"typed": selector, "characters": len(text)}
+        async with self._use_page(session_id, page_id) as page:
+            await page.type(selector, text, delay=delay_ms, timeout=self.settings.runtime.timeout_ms)
+            return {"typed": selector, "characters": len(text)}
 
     async def press(
         self,
@@ -258,44 +283,44 @@ class BrowserSessionManager:
         key: str,
         page_id: str | None = None,
     ) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        await page.press(selector, key, timeout=self.settings.runtime.timeout_ms)
-        return {"pressed": key, "selector": selector}
+        async with self._use_page(session_id, page_id) as page:
+            await page.press(selector, key, timeout=self.settings.runtime.timeout_ms)
+            return {"pressed": key, "selector": selector}
 
     async def hover(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        await page.hover(selector, timeout=self.settings.runtime.timeout_ms)
-        return {"hovered": selector}
+        async with self._use_page(session_id, page_id) as page:
+            await page.hover(selector, timeout=self.settings.runtime.timeout_ms)
+            return {"hovered": selector}
 
     async def reload(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        response = await self._retry(lambda: page.reload(timeout=self.settings.runtime.timeout_ms))
-        return {
-            "url": page.url,
-            "title": await page.title(),
-            "status": response.status if response else None,
-            "ok": response.ok if response else None,
-        }
+        async with self._use_page(session_id, page_id) as page:
+            response = await self._retry(lambda: page.reload(timeout=self.settings.runtime.timeout_ms))
+            return {
+                "url": page.url,
+                "title": await page.title(),
+                "status": response.status if response else None,
+                "ok": response.ok if response else None,
+            }
 
     async def go_back(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        response = await self._retry(lambda: page.go_back(timeout=self.settings.runtime.timeout_ms))
-        return {
-            "url": page.url,
-            "title": await page.title(),
-            "status": response.status if response else None,
-            "ok": response.ok if response else None,
-        }
+        async with self._use_page(session_id, page_id) as page:
+            response = await self._retry(lambda: page.go_back(timeout=self.settings.runtime.timeout_ms))
+            return {
+                "url": page.url,
+                "title": await page.title(),
+                "status": response.status if response else None,
+                "ok": response.ok if response else None,
+            }
 
     async def go_forward(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        response = await self._retry(lambda: page.go_forward(timeout=self.settings.runtime.timeout_ms))
-        return {
-            "url": page.url,
-            "title": await page.title(),
-            "status": response.status if response else None,
-            "ok": response.ok if response else None,
-        }
+        async with self._use_page(session_id, page_id) as page:
+            response = await self._retry(lambda: page.go_forward(timeout=self.settings.runtime.timeout_ms))
+            return {
+                "url": page.url,
+                "title": await page.title(),
+                "status": response.status if response else None,
+                "ok": response.ok if response else None,
+            }
 
     async def wait_for_selector(
         self,
@@ -305,13 +330,13 @@ class BrowserSessionManager:
         state: Literal["attached", "detached", "visible", "hidden"] = "visible",
         timeout_ms: int | None = None,
     ) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        handle = await page.wait_for_selector(
-            selector,
-            state=state,
-            timeout=timeout_ms or self.settings.runtime.timeout_ms,
-        )
-        return {"selector": selector, "state": state, "found": handle is not None}
+        async with self._use_page(session_id, page_id) as page:
+            handle = await page.wait_for_selector(
+                selector,
+                state=state,
+                timeout=timeout_ms or self.settings.runtime.timeout_ms,
+            )
+            return {"selector": selector, "state": state, "found": handle is not None}
 
     async def evaluate(
         self,
@@ -320,21 +345,19 @@ class BrowserSessionManager:
         arg: Any | None = None,
         page_id: str | None = None,
     ) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        result = await page.evaluate(script, arg)
-        return {"result": make_jsonable(result)}
+        async with self._use_page(session_id, page_id) as page:
+            result = await page.evaluate(script, arg)
+            return {"result": make_jsonable(result)}
 
     async def text(self, session_id: str, selector: str | None = None, page_id: str | None = None) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        if selector:
-            content = await page.locator(selector).inner_text(timeout=self.settings.runtime.timeout_ms)
-        else:
-            content = await page.locator("body").inner_text(timeout=self.settings.runtime.timeout_ms)
-        return {"text": content}
+        async with self._use_page(session_id, page_id) as page:
+            target = page.locator(selector) if selector else page.locator("body")
+            content = await target.inner_text(timeout=self.settings.runtime.timeout_ms)
+            return {"text": content}
 
     async def html(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
-        return {"html": await page.content()}
+        async with self._use_page(session_id, page_id) as page:
+            return {"html": await page.content()}
 
     async def screenshot(
         self,
@@ -342,7 +365,6 @@ class BrowserSessionManager:
         page_id: str | None = None,
         options: ScreenshotOptions | None = None,
     ) -> dict[str, Any]:
-        _, page = self._page(session_id, page_id)
         opts = options or ScreenshotOptions()
         kwargs: dict[str, Any] = {
             "full_page": opts.full_page,
@@ -351,36 +373,37 @@ class BrowserSessionManager:
         }
         if opts.quality is not None:
             kwargs["quality"] = opts.quality
-        if opts.path:
-            path = Path(opts.path).expanduser()
-            path.parent.mkdir(parents=True, exist_ok=True)
-            await page.screenshot(path=str(path), **kwargs)
-            return {"path": str(path)}
-        raw = await page.screenshot(**kwargs)
-        return {"base64": base64.b64encode(raw).decode("ascii"), "type": opts.type}
+        async with self._use_page(session_id, page_id) as page:
+            if opts.path:
+                path = Path(opts.path).expanduser()
+                path.parent.mkdir(parents=True, exist_ok=True)
+                await page.screenshot(path=str(path), **kwargs)
+                return {"path": str(path)}
+            raw = await page.screenshot(**kwargs)
+            return {"base64": base64.b64encode(raw).decode("ascii"), "type": opts.type}
 
     async def cookies(self, session_id: str, urls: list[str] | None = None) -> dict[str, Any]:
-        session = self._session(session_id)
-        return {"cookies": await session.context.cookies(urls)}
+        async with self._use_session(session_id) as session:
+            return {"cookies": await session.context.cookies(urls)}
 
     async def add_cookies(self, session_id: str, cookies: list[dict[str, Any]]) -> dict[str, Any]:
-        session = self._session(session_id)
-        await session.context.add_cookies(cookies)
-        return {"added": len(cookies)}
+        async with self._use_session(session_id) as session:
+            await session.context.add_cookies(cookies)
+            return {"added": len(cookies)}
 
     async def clear_cookies(self, session_id: str) -> dict[str, Any]:
-        session = self._session(session_id)
-        await session.context.clear_cookies()
-        return {"cleared": True}
+        async with self._use_session(session_id) as session:
+            await session.context.clear_cookies()
+            return {"cleared": True}
 
     async def storage_state(self, session_id: str, path: str | None = None) -> dict[str, Any]:
-        session = self._session(session_id)
-        if path:
-            target = Path(path).expanduser()
-            target.parent.mkdir(parents=True, exist_ok=True)
-            state = await session.context.storage_state(path=str(target))
-            return {"path": str(target), "storage_state": state}
-        return {"storage_state": await session.context.storage_state()}
+        async with self._use_session(session_id) as session:
+            if path:
+                target = Path(path).expanduser()
+                target.parent.mkdir(parents=True, exist_ok=True)
+                state = await session.context.storage_state(path=str(target))
+                return {"path": str(target), "storage_state": state}
+            return {"storage_state": await session.context.storage_state()}
 
     def profile_path(self, profile_name: str | None = None) -> dict[str, Any]:
         name = profile_name or self.settings.browser.profile_name
@@ -408,18 +431,6 @@ class BrowserSessionManager:
                 {"session_id": session_id},
             )
         return session
-
-    def _page(self, session_id: str, page_id: str | None) -> tuple[str, Any]:
-        session = self._session(session_id)
-        try:
-            return session.get_page(page_id)
-        except KeyError as exc:
-            raise ToolFailure(
-                "PAGE_NOT_FOUND",
-                str(exc),
-                "先调用 browser_new_page，或省略 page_id 使用当前活动页面。",
-                {"session_id": session_id, "page_id": page_id},
-            ) from exc
 
     def _build_args(self, opts: LaunchOptions) -> dict[str, Any]:
         settings = self.settings.browser
