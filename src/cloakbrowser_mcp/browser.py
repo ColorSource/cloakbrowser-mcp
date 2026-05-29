@@ -292,6 +292,52 @@ class BrowserSessionManager:
             await page.hover(selector, timeout=self.settings.runtime.timeout_ms)
             return {"hovered": selector}
 
+    async def select_option(
+        self,
+        session_id: str,
+        selector: str,
+        values: list[str] | None = None,
+        labels: list[str] | None = None,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        if values is None and labels is None:
+            raise ToolFailure(
+                "INVALID_SELECT_OPTION",
+                "select_option 需要 values 或 labels 之一。",
+                "传入 values（option 的 value 列表）或 labels（可见文本列表）。",
+                {"selector": selector},
+            )
+        async with self._use_page(session_id, page_id) as page:
+            kwargs: dict[str, Any] = {"timeout": self.settings.runtime.timeout_ms}
+            if values is not None:
+                kwargs["value"] = values
+            if labels is not None:
+                kwargs["label"] = labels
+            selected = await page.select_option(selector, **kwargs)
+            return {"selector": selector, "selected": selected}
+
+    async def set_input_files(
+        self,
+        session_id: str,
+        selector: str,
+        files: list[str],
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        paths = [str(Path(item).expanduser()) for item in files]
+        async with self._use_page(session_id, page_id) as page:
+            await page.set_input_files(selector, paths, timeout=self.settings.runtime.timeout_ms)
+            return {"selector": selector, "files": paths}
+
+    async def check(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            await page.check(selector, timeout=self.settings.runtime.timeout_ms)
+            return {"checked": selector}
+
+    async def uncheck(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            await page.uncheck(selector, timeout=self.settings.runtime.timeout_ms)
+            return {"unchecked": selector}
+
     async def reload(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
         async with self._use_page(session_id, page_id) as page:
             response = await self._retry(lambda: page.reload(timeout=self.settings.runtime.timeout_ms))

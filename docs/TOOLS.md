@@ -195,6 +195,35 @@
 - `selector`
 - `page_id`：可选。
 
+### `browser_select_option`
+
+参数：
+
+- `session_id`
+- `selector`：`<select>` 元素。
+- `values`：可选；按 option 的 value 选择。
+- `labels`：可选；按可见文本选择。`values` 与 `labels` 至少传一个。
+- `page_id`：可选。
+
+返回实际选中的 value 列表。
+
+### `browser_set_input_files`
+
+参数：
+
+- `session_id`
+- `selector`：`<input type=file>`。
+- `files`：本地文件路径数组（支持 `~` 展开）；传空数组清空。
+- `page_id`：可选。
+
+### `browser_check` / `browser_uncheck`
+
+参数：
+
+- `session_id`
+- `selector`：checkbox 或 radio。
+- `page_id`：可选。
+
 ### `browser_reload`
 
 参数：

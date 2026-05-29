@@ -29,6 +29,10 @@ TOOL_DEFINITIONS: list[dict[str, str]] = [
     {"name": "browser_type", "description": "按字符输入文本，可设置 delay_ms。"},
     {"name": "browser_press", "description": "向 selector 发送键盘按键。"},
     {"name": "browser_hover", "description": "悬停到 selector。"},
+    {"name": "browser_select_option", "description": "选择 <select> 下拉项，可按 value 或可见文本 label。"},
+    {"name": "browser_set_input_files", "description": "给 file input 设置一个或多个本地文件路径。"},
+    {"name": "browser_check", "description": "勾选 checkbox 或 radio。"},
+    {"name": "browser_uncheck", "description": "取消勾选 checkbox。"},
     {"name": "browser_reload", "description": "刷新当前页面。"},
     {"name": "browser_go_back", "description": "后退到浏览器历史上一页。"},
     {"name": "browser_go_forward", "description": "前进到浏览器历史下一页。"},
@@ -224,6 +228,49 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
         """悬停到 selector。"""
         try:
             return ok(await manager.hover(session_id, selector, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_select_option(
+        session_id: str,
+        selector: str,
+        values: list[str] | None = None,
+        labels: list[str] | None = None,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        """选择下拉项。传 values（option value）或 labels（可见文本）之一。"""
+        try:
+            return ok(await manager.select_option(session_id, selector, values, labels, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_set_input_files(
+        session_id: str,
+        selector: str,
+        files: list[str],
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        """给 file input 设置本地文件。"""
+        try:
+            return ok(await manager.set_input_files(session_id, selector, files, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_check(session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        """勾选 checkbox/radio。"""
+        try:
+            return ok(await manager.check(session_id, selector, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_uncheck(session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        """取消勾选 checkbox。"""
+        try:
+            return ok(await manager.uncheck(session_id, selector, page_id))
         except Exception as exc:
             return fail_from_exception(exc)
 
