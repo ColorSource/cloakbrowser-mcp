@@ -178,6 +178,10 @@ class BrowserSessionManager:
     def list_sessions(self) -> dict[str, Any]:
         return {"sessions": [session.summary() for session in self.sessions.values()]}
 
+    async def shutdown(self) -> None:
+        """服务关闭时调用：统一关闭全部会话，避免残留 Chromium 进程。"""
+        await self.close_session()
+
     async def new_page(self, session_id: str) -> dict[str, Any]:
         session = self._session(session_id)
         page = await session.context.new_page()
