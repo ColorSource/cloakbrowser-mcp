@@ -405,6 +405,29 @@ class BrowserSessionManager:
         async with self._use_page(session_id, page_id) as page:
             return {"html": await page.content()}
 
+    async def get_attribute(
+        self,
+        session_id: str,
+        selector: str,
+        name: str,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            value = await page.get_attribute(selector, name, timeout=self.settings.runtime.timeout_ms)
+            return {"selector": selector, "attribute": name, "value": value}
+
+    async def is_visible(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            return {"selector": selector, "visible": await page.is_visible(selector)}
+
+    async def is_enabled(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            return {"selector": selector, "enabled": await page.is_enabled(selector)}
+
+    async def count(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            return {"selector": selector, "count": await page.locator(selector).count()}
+
     async def screenshot(
         self,
         session_id: str,

@@ -283,6 +283,37 @@
 - `session_id`
 - `page_id`：可选。
 
+### `browser_get_attribute`
+
+参数：
+
+- `session_id`
+- `selector`
+- `name`：属性名，如 `href`、`src`、`value`。
+- `page_id`：可选。
+
+元素不存在该属性时返回 `value: null`。
+
+### `browser_is_visible` / `browser_is_enabled`
+
+参数：
+
+- `session_id`
+- `selector`
+- `page_id`：可选。
+
+返回元素当前可见 / 可交互状态（立即判断，不等待）。
+
+### `browser_count`
+
+参数：
+
+- `session_id`
+- `selector`
+- `page_id`：可选。
+
+返回匹配该 selector 的元素数量，可用于判断列表项是否加载。
+
 ### `browser_screenshot`
 
 参数：

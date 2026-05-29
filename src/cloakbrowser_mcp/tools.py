@@ -40,6 +40,10 @@ TOOL_DEFINITIONS: list[dict[str, str]] = [
     {"name": "browser_evaluate", "description": "在页面中执行 JavaScript 并返回 JSON 可序列化结果。"},
     {"name": "browser_get_text", "description": "读取 body 或指定 selector 的可见文本。"},
     {"name": "browser_get_html", "description": "读取当前页面 HTML。"},
+    {"name": "browser_get_attribute", "description": "读取元素属性值（href/src/value 等）。"},
+    {"name": "browser_is_visible", "description": "判断元素当前是否可见。"},
+    {"name": "browser_is_enabled", "description": "判断元素当前是否可交互。"},
+    {"name": "browser_count", "description": "返回匹配 selector 的元素数量。"},
     {"name": "browser_screenshot", "description": "截图并返回 base64，或写入 path。"},
     {"name": "browser_get_cookies", "description": "读取当前 context cookies。"},
     {"name": "browser_add_cookies", "description": "向当前 context 添加 cookies。"},
@@ -360,6 +364,43 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
         """读取页面 HTML。"""
         try:
             return ok(await manager.html(session_id, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_get_attribute(
+        session_id: str,
+        selector: str,
+        name: str,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        """读取元素属性值。"""
+        try:
+            return ok(await manager.get_attribute(session_id, selector, name, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_is_visible(session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        """判断元素是否可见。"""
+        try:
+            return ok(await manager.is_visible(session_id, selector, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_is_enabled(session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        """判断元素是否可交互。"""
+        try:
+            return ok(await manager.is_enabled(session_id, selector, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_count(session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        """返回匹配 selector 的元素数量。"""
+        try:
+            return ok(await manager.count(session_id, selector, page_id))
         except Exception as exc:
             return fail_from_exception(exc)
 
