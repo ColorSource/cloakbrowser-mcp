@@ -62,6 +62,15 @@ class ScreenshotOptions(BaseModel):
     type: Literal["png", "jpeg"] = "png"
     quality: int | None = None
     omit_background: bool = False
+    selector: str | None = None
+
+
+class PdfOptions(BaseModel):
+    path: str | None = None
+    format: str = "A4"
+    landscape: bool = False
+    print_background: bool = True
+    scale: float | None = None
 
 
 class BrowserSessionManager:
@@ -338,6 +347,33 @@ class BrowserSessionManager:
             await page.uncheck(selector, timeout=self.settings.runtime.timeout_ms)
             return {"unchecked": selector}
 
+    async def dblclick(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            await page.dblclick(selector, timeout=self.settings.runtime.timeout_ms)
+            return {"double_clicked": selector}
+
+    async def focus(self, session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            await page.focus(selector, timeout=self.settings.runtime.timeout_ms)
+            return {"focused": selector}
+
+    async def scroll(
+        self,
+        session_id: str,
+        selector: str | None = None,
+        delta_x: int = 0,
+        delta_y: int = 800,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        async with self._use_page(session_id, page_id) as page:
+            if selector:
+                await page.locator(selector).scroll_into_view_if_needed(
+                    timeout=self.settings.runtime.timeout_ms
+                )
+                return {"scrolled_into_view": selector}
+            await page.mouse.wheel(delta_x, delta_y)
+            return {"delta_x": delta_x, "delta_y": delta_y}
+
     async def reload(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
         async with self._use_page(session_id, page_id) as page:
             response = await self._retry(lambda: page.reload(timeout=self.settings.runtime.timeout_ms))
@@ -475,20 +511,47 @@ class BrowserSessionManager:
     ) -> dict[str, Any]:
         opts = options or ScreenshotOptions()
         kwargs: dict[str, Any] = {
-            "full_page": opts.full_page,
             "type": opts.type,
             "omit_background": opts.omit_background,
+            "timeout": self.settings.runtime.timeout_ms,
         }
         if opts.quality is not None:
             kwargs["quality"] = opts.quality
+        if not opts.selector:
+            # full_page 仅适用于整页截图；locator 截图不接受该参数。
+            kwargs["full_page"] = opts.full_page
+        async with self._use_page(session_id, page_id) as page:
+            target = page.locator(opts.selector) if opts.selector else page
+            if opts.path:
+                path = Path(opts.path).expanduser()
+                path.parent.mkdir(parents=True, exist_ok=True)
+                await target.screenshot(path=str(path), **kwargs)
+                return {"path": str(path)}
+            raw = await target.screenshot(**kwargs)
+            return {"base64": base64.b64encode(raw).decode("ascii"), "type": opts.type}
+
+    async def pdf(
+        self,
+        session_id: str,
+        page_id: str | None = None,
+        options: PdfOptions | None = None,
+    ) -> dict[str, Any]:
+        opts = options or PdfOptions()
+        kwargs: dict[str, Any] = {
+            "format": opts.format,
+            "landscape": opts.landscape,
+            "print_background": opts.print_background,
+        }
+        if opts.scale is not None:
+            kwargs["scale"] = opts.scale
         async with self._use_page(session_id, page_id) as page:
             if opts.path:
                 path = Path(opts.path).expanduser()
                 path.parent.mkdir(parents=True, exist_ok=True)
-                await page.screenshot(path=str(path), **kwargs)
+                await page.pdf(path=str(path), **kwargs)
                 return {"path": str(path)}
-            raw = await page.screenshot(**kwargs)
-            return {"base64": base64.b64encode(raw).decode("ascii"), "type": opts.type}
+            raw = await page.pdf(**kwargs)
+            return {"base64": base64.b64encode(raw).decode("ascii")}
 
     async def cookies(self, session_id: str, urls: list[str] | None = None) -> dict[str, Any]:
         async with self._use_session(session_id) as session:

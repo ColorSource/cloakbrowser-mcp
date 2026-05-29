@@ -6,7 +6,13 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from .browser import BrowserSessionManager, LaunchOptions, NavigateOptions, ScreenshotOptions
+from .browser import (
+    BrowserSessionManager,
+    LaunchOptions,
+    NavigateOptions,
+    PdfOptions,
+    ScreenshotOptions,
+)
 from .config import Settings, settings_for_display
 from .healthcheck import run_healthcheck
 from .utils import fail_from_exception, ok
@@ -33,6 +39,9 @@ TOOL_DEFINITIONS: list[dict[str, str]] = [
     {"name": "browser_set_input_files", "description": "给 file input 设置一个或多个本地文件路径。"},
     {"name": "browser_check", "description": "勾选 checkbox 或 radio。"},
     {"name": "browser_uncheck", "description": "取消勾选 checkbox。"},
+    {"name": "browser_dblclick", "description": "双击 selector。"},
+    {"name": "browser_focus", "description": "聚焦到 selector。"},
+    {"name": "browser_scroll", "description": "滚动页面（mouse wheel）或把元素滚动到可见。"},
     {"name": "browser_reload", "description": "刷新当前页面。"},
     {"name": "browser_go_back", "description": "后退到浏览器历史上一页。"},
     {"name": "browser_go_forward", "description": "前进到浏览器历史下一页。"},
@@ -47,7 +56,8 @@ TOOL_DEFINITIONS: list[dict[str, str]] = [
     {"name": "browser_is_visible", "description": "判断元素当前是否可见。"},
     {"name": "browser_is_enabled", "description": "判断元素当前是否可交互。"},
     {"name": "browser_count", "description": "返回匹配 selector 的元素数量。"},
-    {"name": "browser_screenshot", "description": "截图并返回 base64，或写入 path。"},
+    {"name": "browser_screenshot", "description": "截图并返回图片内容，或写入 path；传 selector 截单个元素。"},
+    {"name": "browser_pdf", "description": "把页面导出为 PDF（仅 headless 模式可用）。"},
     {"name": "browser_get_cookies", "description": "读取当前 context cookies。"},
     {"name": "browser_add_cookies", "description": "向当前 context 添加 cookies。"},
     {"name": "browser_clear_cookies", "description": "清空当前 context cookies。"},
@@ -282,6 +292,36 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
             return fail_from_exception(exc)
 
     @mcp.tool()
+    async def browser_dblclick(session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        """双击 selector。"""
+        try:
+            return ok(await manager.dblclick(session_id, selector, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_focus(session_id: str, selector: str, page_id: str | None = None) -> dict[str, Any]:
+        """聚焦到 selector。"""
+        try:
+            return ok(await manager.focus(session_id, selector, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_scroll(
+        session_id: str,
+        selector: str | None = None,
+        delta_x: int = 0,
+        delta_y: int = 800,
+        page_id: str | None = None,
+    ) -> dict[str, Any]:
+        """滚动页面或把元素滚动到可见。传 selector 时滚动到该元素，否则按 delta 滚动。"""
+        try:
+            return ok(await manager.scroll(session_id, selector, delta_x, delta_y, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
     async def browser_reload(session_id: str, page_id: str | None = None) -> dict[str, Any]:
         """刷新当前页面。"""
         try:
@@ -454,6 +494,18 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
         """截图。"""
         try:
             return ok(await manager.screenshot(session_id, page_id, options))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_pdf(
+        session_id: str,
+        page_id: str | None = None,
+        options: PdfOptions | None = None,
+    ) -> dict[str, Any]:
+        """把页面导出为 PDF（仅 headless）。"""
+        try:
+            return ok(await manager.pdf(session_id, page_id, options))
         except Exception as exc:
             return fail_from_exception(exc)
 

@@ -224,6 +224,25 @@
 - `selector`：checkbox 或 radio。
 - `page_id`：可选。
 
+### `browser_dblclick`
+
+参数：`session_id`、`selector`、`page_id`（可选）。双击元素。
+
+### `browser_focus`
+
+参数：`session_id`、`selector`、`page_id`（可选）。聚焦元素。
+
+### `browser_scroll`
+
+参数：
+
+- `session_id`
+- `selector`：可选；传入时把该元素滚动到可见。
+- `delta_x` / `delta_y`：无 selector 时按像素滚动，`delta_y` 默认 800（向下一屏）。
+- `page_id`：可选。
+
+humanize 开启时滚动由上游行为层处理为真实节奏。
+
 ### `browser_reload`
 
 参数：
@@ -350,11 +369,24 @@
 
 - `session_id`
 - `page_id`：可选。
-- `options.path`：可选；不传则返回 base64。
+- `options.path`：可选；不传则返回图片内容。
 - `options.full_page`
 - `options.type`：`png` 或 `jpeg`。
 - `options.quality`
 - `options.omit_background`
+- `options.selector`：可选；只截该元素（此时忽略 `full_page`）。
+
+### `browser_pdf`
+
+参数：
+
+- `session_id`
+- `page_id`：可选。
+- `options.path`：可选；不传则返回 base64。
+- `options.format`：纸张大小，默认 `A4`。
+- `options.landscape`、`options.print_background`、`options.scale`。
+
+仅 headless 模式可用；headed 模式下上游 Chromium 会拒绝生成 PDF。
 
 ## State Tools
 
