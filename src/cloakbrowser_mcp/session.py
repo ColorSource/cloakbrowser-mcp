@@ -15,6 +15,13 @@ def _safe_url(page: Any) -> str | None:
         return None
 
 
+def _is_closed(page: Any) -> bool:
+    try:
+        return bool(page.is_closed())
+    except Exception:
+        return False
+
+
 @dataclass
 class BrowserSession:
     session_id: str
@@ -46,6 +53,21 @@ class BrowserSession:
         if not target_id or target_id not in self.pages:
             raise KeyError("页面不存在。先调用 browser_new_page 或 browser_launch。")
         return target_id, self.pages[target_id]
+
+    def drop_page(self, page_id: str) -> None:
+        """从登记表移除某页，必要时把活动页指向最近的剩余页。"""
+        self.pages.pop(page_id, None)
+        if self.active_page_id == page_id:
+            self.active_page_id = next(reversed(self.pages), None)
+
+    def prune_closed(self) -> list[str]:
+        """移除已被站点/用户关闭的页面，返回被清理的 page_id。"""
+        removed = [pid for pid, page in list(self.pages.items()) if _is_closed(page)]
+        for pid in removed:
+            self.pages.pop(pid, None)
+        if self.active_page_id not in self.pages:
+            self.active_page_id = next(reversed(self.pages), None)
+        return removed
 
     def summary(self) -> dict[str, Any]:
         return {

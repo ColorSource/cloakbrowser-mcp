@@ -191,6 +191,8 @@ class BrowserSessionManager:
         return {"closed": closed, "remaining": list(self.sessions)}
 
     def list_sessions(self) -> dict[str, Any]:
+        for session in self.sessions.values():
+            session.prune_closed()
         return {"sessions": [session.summary() for session in self.sessions.values()]}
 
     async def shutdown(self) -> None:
@@ -202,6 +204,41 @@ class BrowserSessionManager:
             page = await session.context.new_page()
             page_id = session.register_page(page)
             return {"session_id": session_id, "page_id": page_id, "pages": list(session.pages)}
+
+    async def close_page(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
+        async with self._use_session(session_id) as session:
+            try:
+                target_id, page = session.get_page(page_id)
+            except KeyError as exc:
+                raise ToolFailure(
+                    "PAGE_NOT_FOUND",
+                    str(exc),
+                    "传入有效 page_id，或用 browser_list_sessions 查看当前页面。",
+                    {"session_id": session_id, "page_id": page_id},
+                ) from exc
+            try:
+                await page.close()
+            except Exception:
+                pass
+            session.drop_page(target_id)
+            return {
+                "closed_page": target_id,
+                "active_page_id": session.active_page_id,
+                "pages": list(session.pages),
+            }
+
+    async def switch_page(self, session_id: str, page_id: str) -> dict[str, Any]:
+        async with self._use_session(session_id) as session:
+            session.prune_closed()
+            if page_id not in session.pages:
+                raise ToolFailure(
+                    "PAGE_NOT_FOUND",
+                    f"找不到页面: {page_id}",
+                    "用 browser_list_sessions 查看可用 page_id。",
+                    {"session_id": session_id, "page_id": page_id},
+                )
+            session.active_page_id = page_id
+            return {"active_page_id": page_id, "pages": list(session.pages)}
 
     @asynccontextmanager
     async def _use_session(self, session_id: str) -> AsyncIterator[BrowserSession]:

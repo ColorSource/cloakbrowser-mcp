@@ -138,6 +138,24 @@
 
 返回新 `page_id`。
 
+### `browser_close_page`
+
+参数：
+
+- `session_id`
+- `page_id`：可选；不传关闭活动页。
+
+关闭后活动页指向最近的剩余页面。
+
+### `browser_switch_page`
+
+参数：
+
+- `session_id`
+- `page_id`：要设为活动的页面。
+
+切换后续工具默认作用的页面。`browser_list_sessions` 会列出每页的 `page_id` 与 `url`，并自动清理已关闭的页面。
+
 ### `browser_navigate`
 
 参数：

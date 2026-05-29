@@ -29,6 +29,8 @@ TOOL_DEFINITIONS: list[dict[str, str]] = [
     {"name": "browser_list_sessions", "description": "列出当前 MCP 进程管理的浏览器会话。"},
     {"name": "browser_close", "description": "关闭指定会话；不传 session_id 时关闭全部会话。"},
     {"name": "browser_new_page", "description": "在已有会话中创建新页面。"},
+    {"name": "browser_close_page", "description": "关闭会话中的单个页面；不传 page_id 关活动页。"},
+    {"name": "browser_switch_page", "description": "切换会话的活动页面。"},
     {"name": "browser_navigate", "description": "打开 URL 并返回标题、最终 URL 和响应状态。"},
     {"name": "browser_click", "description": "点击 CSS/文本等 Playwright selector。"},
     {"name": "browser_fill", "description": "填充输入框。humanize=true 时由上游行为层处理节奏。"},
@@ -176,6 +178,22 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
         """在指定会话中新建页面。"""
         try:
             return ok(await manager.new_page(session_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_close_page(session_id: str, page_id: str | None = None) -> dict[str, Any]:
+        """关闭单个页面。不传 page_id 时关闭活动页。"""
+        try:
+            return ok(await manager.close_page(session_id, page_id))
+        except Exception as exc:
+            return fail_from_exception(exc)
+
+    @mcp.tool()
+    async def browser_switch_page(session_id: str, page_id: str) -> dict[str, Any]:
+        """切换会话的活动页面。"""
+        try:
+            return ok(await manager.switch_page(session_id, page_id))
         except Exception as exc:
             return fail_from_exception(exc)
 
