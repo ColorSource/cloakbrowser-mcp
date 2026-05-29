@@ -8,6 +8,7 @@ import json
 import socket
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -183,6 +184,21 @@ class BrowserSessionManager:
         page_id = session.register_page(page)
         return {"session_id": session_id, "page_id": page_id, "pages": list(session.pages)}
 
+    async def _retry(self, func: Callable[[], Awaitable[Any]]) -> Any:
+        """对易抖动的导航类操作做重试。重试次数取 runtime.retries（0 表示只尝试一次）。"""
+        attempts = max(0, self.settings.runtime.retries) + 1
+        last_exc: Exception | None = None
+        for index in range(attempts):
+            try:
+                return await func()
+            except Exception as exc:
+                last_exc = exc
+                if index + 1 >= attempts:
+                    raise
+                await asyncio.sleep(min(0.25 * (index + 1), 2.0))
+        assert last_exc is not None  # pragma: no cover
+        raise last_exc
+
     async def navigate(
         self,
         session_id: str,
@@ -192,11 +208,9 @@ class BrowserSessionManager:
     ) -> dict[str, Any]:
         _, page = self._page(session_id, page_id)
         opts = options or NavigateOptions()
-        response = await page.goto(
-            url,
-            wait_until=opts.wait_until,
-            timeout=opts.timeout_ms or self.settings.runtime.timeout_ms,
-            referer=opts.referer,
+        timeout = opts.timeout_ms or self.settings.runtime.timeout_ms
+        response = await self._retry(
+            lambda: page.goto(url, wait_until=opts.wait_until, timeout=timeout, referer=opts.referer)
         )
         return {
             "url": page.url,
@@ -251,7 +265,7 @@ class BrowserSessionManager:
 
     async def reload(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
         _, page = self._page(session_id, page_id)
-        response = await page.reload(timeout=self.settings.runtime.timeout_ms)
+        response = await self._retry(lambda: page.reload(timeout=self.settings.runtime.timeout_ms))
         return {
             "url": page.url,
             "title": await page.title(),
@@ -261,7 +275,7 @@ class BrowserSessionManager:
 
     async def go_back(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
         _, page = self._page(session_id, page_id)
-        response = await page.go_back(timeout=self.settings.runtime.timeout_ms)
+        response = await self._retry(lambda: page.go_back(timeout=self.settings.runtime.timeout_ms))
         return {
             "url": page.url,
             "title": await page.title(),
@@ -271,7 +285,7 @@ class BrowserSessionManager:
 
     async def go_forward(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
         _, page = self._page(session_id, page_id)
-        response = await page.go_forward(timeout=self.settings.runtime.timeout_ms)
+        response = await self._retry(lambda: page.go_forward(timeout=self.settings.runtime.timeout_ms))
         return {
             "url": page.url,
             "title": await page.title(),
