@@ -132,6 +132,10 @@ class BrowserSessionManager:
             browser=browser,
             profile_dir=profile_dir,
         )
+        # 自动捕获 window.open / target=_blank 等弹出的新标签页，并登记已存在的页面。
+        context.on("page", session.register_page)
+        for existing in context.pages:
+            session.register_page(existing)
         page = await context.new_page()
         page_id = session.register_page(page)
         self.sessions[session_id] = session
