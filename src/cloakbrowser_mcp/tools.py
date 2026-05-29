@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 
 from .browser import (
     BrowserSessionManager,
@@ -508,10 +508,14 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
         session_id: str,
         page_id: str | None = None,
         options: ScreenshotOptions | None = None,
-    ) -> dict[str, Any]:
-        """截图。"""
+    ) -> Any:
+        """截图。不写 path 时返回可被视觉模型直接查看的图片内容。"""
         try:
-            return ok(await manager.screenshot(session_id, page_id, options))
+            result = await manager.screenshot(session_id, page_id, options)
+            raw = result.pop("image_bytes", None)
+            if raw is not None:
+                return Image(data=raw, format=result.get("type", "png"))
+            return ok(result)
         except Exception as exc:
             return fail_from_exception(exc)
 

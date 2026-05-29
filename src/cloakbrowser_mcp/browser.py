@@ -605,7 +605,7 @@ class BrowserSessionManager:
                 await target.screenshot(path=str(path), **kwargs)
                 return {"path": str(path)}
             raw = await target.screenshot(**kwargs)
-            return {"base64": base64.b64encode(raw).decode("ascii"), "type": opts.type}
+            return {"image_bytes": raw, "type": opts.type}
 
     async def pdf(
         self,
