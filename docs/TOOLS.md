@@ -342,6 +342,9 @@ humanize 开启时滚动由上游行为层处理为真实节奏。
 - `session_id`
 - `selector`：可选；默认读取 `body`。
 - `page_id`：可选。
+- `max_chars`：可选；超出则截断，默认取 `CLOAKBROWSER_MCP_MAX_OUTPUT_CHARS`（传 `0` 表示不截断）。
+
+返回 `text`、`truncated`（是否截断）、`length`（原始字符数）。
 
 ### `browser_get_html`
 
@@ -349,6 +352,9 @@ humanize 开启时滚动由上游行为层处理为真实节奏。
 
 - `session_id`
 - `page_id`：可选。
+- `max_chars`：可选；同上，保护 Agent 上下文。
+
+返回 `html`、`truncated`、`length`。
 
 ### `browser_get_attribute`
 

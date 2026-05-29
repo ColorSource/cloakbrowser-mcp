@@ -547,15 +547,34 @@ class BrowserSessionManager:
             result = await page.evaluate(script, arg)
             return {"result": make_jsonable(result)}
 
-    async def text(self, session_id: str, selector: str | None = None, page_id: str | None = None) -> dict[str, Any]:
+    async def text(
+        self,
+        session_id: str,
+        selector: str | None = None,
+        page_id: str | None = None,
+        max_chars: int | None = None,
+    ) -> dict[str, Any]:
         async with self._use_page(session_id, page_id) as page:
             target = page.locator(selector) if selector else page.locator("body")
             content = await target.inner_text(timeout=self.settings.runtime.timeout_ms)
-            return {"text": content}
+            return self._with_truncation(content, "text", max_chars)
 
-    async def html(self, session_id: str, page_id: str | None = None) -> dict[str, Any]:
+    async def html(
+        self,
+        session_id: str,
+        page_id: str | None = None,
+        max_chars: int | None = None,
+    ) -> dict[str, Any]:
         async with self._use_page(session_id, page_id) as page:
-            return {"html": await page.content()}
+            content = await page.content()
+            return self._with_truncation(content, "html", max_chars)
+
+    def _with_truncation(self, content: str, key: str, max_chars: int | None) -> dict[str, Any]:
+        limit = self.settings.runtime.max_output_chars if max_chars is None else max_chars
+        total = len(content)
+        if limit and total > limit:
+            return {key: content[:limit], "truncated": True, "length": total, "returned": limit}
+        return {key: content, "truncated": False, "length": total}
 
     async def get_attribute(
         self,

@@ -451,18 +451,23 @@ def register_tools(mcp: FastMCP, manager: BrowserSessionManager, settings: Setti
         session_id: str,
         selector: str | None = None,
         page_id: str | None = None,
+        max_chars: int | None = None,
     ) -> dict[str, Any]:
-        """读取页面文本。"""
+        """读取页面文本。超过 max_chars（默认配置值）会截断并标记 truncated。"""
         try:
-            return ok(await manager.text(session_id, selector, page_id))
+            return ok(await manager.text(session_id, selector, page_id, max_chars))
         except Exception as exc:
             return fail_from_exception(exc)
 
     @mcp.tool()
-    async def browser_get_html(session_id: str, page_id: str | None = None) -> dict[str, Any]:
-        """读取页面 HTML。"""
+    async def browser_get_html(
+        session_id: str,
+        page_id: str | None = None,
+        max_chars: int | None = None,
+    ) -> dict[str, Any]:
+        """读取页面 HTML。超过 max_chars 会截断并标记 truncated。"""
         try:
-            return ok(await manager.html(session_id, page_id))
+            return ok(await manager.html(session_id, page_id, max_chars))
         except Exception as exc:
             return fail_from_exception(exc)
 
