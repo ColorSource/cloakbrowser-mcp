@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # CloakBrowserMCP — one-command setup
-# Usage: curl -fsSL https://raw.githubusercontent.com/overtimepog/CloakMCP/main/setup.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/ColorSource/cloakbrowser-mcp/main/setup.sh | bash
 
-REPO="https://github.com/overtimepog/CloakMCP.git"
-INSTALL_DIR="${CLOAKMCP_DIR:-$HOME/.cloakbrowsermcp}"
+REPO="https://github.com/ColorSource/cloakbrowser-mcp.git"
+INSTALL_DIR="${CLOAKMCP_DIR:-$HOME/.cloakbrowser-mcp}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -79,7 +79,7 @@ source "$VENV_DIR/bin/activate"
 PYTHON="python"  # now points to the venv python
 
 # ─── Install package ───────────────────────────────────────────────────
-info "Installing cloakbrowsermcp and dependencies..."
+info "Installing cloakbrowser-mcp and dependencies..."
 "$PYTHON" -m pip install --upgrade pip --quiet 2>&1 | grep -v "^\[notice\]" || true
 "$PYTHON" -m pip install -e ".[dev]" --quiet 2>&1 | grep -v "^\[notice\]" || true
 ok "Package installed"

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cloakbrowsermcp"
+name = "cloakbrowser-mcp"
 version = "2.0.4"
 description = "Stealth browser MCP server — anti-detection Chromium + snapshot-first AI agent interface"
 readme = "README.md"
@@ -62,14 +62,17 @@ dev = [
 cloakbrowser-mcp = "cloakbrowsermcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/overtimepog/CloakMCP"
-Documentation = "https://github.com/overtimepog/CloakMCP#readme"
-Repository = "https://github.com/overtimepog/CloakMCP"
-Issues = "https://github.com/overtimepog/CloakMCP/issues"
+Homepage = "https://github.com/ColorSource/cloakbrowser-mcp"
+Documentation = "https://github.com/ColorSource/cloakbrowser-mcp#readme"
+Repository = "https://github.com/ColorSource/cloakbrowser-mcp"
+Issues = "https://github.com/ColorSource/cloakbrowser-mcp/issues"
 
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cloakbrowsermcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

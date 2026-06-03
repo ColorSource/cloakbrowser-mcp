@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.overtimepog/CloakMCP",
+  "name": "io.github.ColorSource/cloakbrowser-mcp",
   "description": "Stealth browser MCP server — anti-detection Chromium with snapshot-first agent interface",
   "repository": {
-    "url": "https://github.com/overtimepog/CloakMCP",
+    "url": "https://github.com/ColorSource/cloakbrowser-mcp",
     "source": "github"
   },
-  "version": "2.0.1",
+  "version": "2.0.4",
   "packages": [
     {
       "registryType": "pypi",
-      "identifier": "cloakbrowsermcp",
-      "version": "2.0.1",
+      "identifier": "cloakbrowser-mcp",
+      "version": "2.0.4",
       "transport": {
         "type": "stdio"
       },

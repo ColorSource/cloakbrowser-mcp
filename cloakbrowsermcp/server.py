@@ -39,7 +39,7 @@ from .network import (
     set_cookies as _set_cookies,
 )
 
-logger = logging.getLogger("cloakbrowsermcp")
+logger = logging.getLogger("cloakbrowser-mcp")
 
 LOGS_DIR = Path.home() / ".cloakbrowser" / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)

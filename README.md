@@ -1,6 +1,6 @@
 # CloakBrowser MCP
 
-<!-- mcp-name: io.github.overtimepog/CloakMCP -->
+<!-- mcp-name: io.github.ColorSource/cloakbrowser-mcp -->
 
 **Stealth browser automation for AI agents** — a [Model Context Protocol](https://modelcontextprotocol.io) server combining CloakBrowser's anti-detection with Playwright MCP-inspired architecture.
 
@@ -26,7 +26,7 @@ CloakBrowser is a source-level patched Chromium that passes Cloudflare Turnstile
 ### Install
 
 ```bash
-pip install cloakbrowsermcp
+pip install cloakbrowser-mcp
 ```
 
 ### Use with Claude Desktop

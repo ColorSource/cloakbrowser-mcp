@@ -15,7 +15,7 @@ from typing import Any
 
 from cloakbrowser import launch_async, launch_persistent_context_async
 
-logger = logging.getLogger("cloakbrowsermcp")
+logger = logging.getLogger("cloakbrowser-mcp")
 
 
 def detect_screen_size() -> tuple[int, int] | None:
