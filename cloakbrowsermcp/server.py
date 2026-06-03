@@ -4,7 +4,7 @@ A clean, focused MCP server that combines CloakBrowser's anti-detection
 with Playwright MCP-inspired architecture: snapshot-first navigation,
 ref-based interaction, clean markdown extraction, and annotated screenshots.
 
-~21 core tools. Stealth by default. No CSS selector tools.
+~25 core tools. Stealth by default. No CSS selector tools.
 """
 
 from __future__ import annotations
@@ -245,18 +245,65 @@ async def _do_click(page_id: str, ref: str) -> dict:
     return await retry_action(_click, max_retries=1)
 
 
-async def _do_type(page_id: str, ref: str, text: str, clear: bool, submit: bool) -> dict:
+async def _humanized_type(
+    page,
+    selector: str,
+    text: str,
+    clear: bool,
+    submit: bool,
+    min_delay_ms: int,
+    max_delay_ms: int,
+) -> dict:
+    """Type text with uneven per-character timing."""
+    safe_min = max(10, min(int(min_delay_ms), 1000))
+    safe_max = max(safe_min, min(int(max_delay_ms), 1500))
+    locator = page.locator(selector)
+
+    await locator.click(timeout=5000)
+    await asyncio.sleep(random.uniform(0.08, 0.25))
+    if clear:
+        await page.keyboard.press("Control+A")
+        await asyncio.sleep(random.uniform(0.03, 0.12))
+        await page.keyboard.press("Backspace")
+        await asyncio.sleep(random.uniform(0.05, 0.18))
+
+    for index, char in enumerate(text):
+        await page.keyboard.type(char, delay=random.randint(safe_min, safe_max))
+        if char in " .,;:/-" or (index and index % random.randint(7, 14) == 0):
+            await asyncio.sleep(random.uniform(0.03, 0.16))
+
+    if submit:
+        await asyncio.sleep(random.uniform(0.12, 0.35))
+        await page.keyboard.press("Enter")
+
+    return {"mode": "humanized", "min_delay_ms": safe_min, "max_delay_ms": safe_max}
+
+
+async def _do_type(
+    page_id: str,
+    ref: str,
+    text: str,
+    clear: bool,
+    submit: bool,
+    humanize: bool = True,
+    min_delay_ms: int = 35,
+    max_delay_ms: int = 140,
+) -> dict:
     """Type into element by ref."""
     page = _session.get_page(page_id)
     clean_ref, selector = resolve_ref(_session, page_id, ref)
 
-    if clear:
-        await page.fill(selector, "")
-    await page.type(selector, text)
-    if submit:
-        await page.press(selector, "Enter")
+    if humanize:
+        detail = await _humanized_type(page, selector, text, clear, submit, min_delay_ms, max_delay_ms)
+    else:
+        if clear:
+            await page.fill(selector, "")
+        await page.type(selector, text)
+        if submit:
+            await page.press(selector, "Enter")
+        detail = {"mode": "direct"}
 
-    return {"status": "typed", "ref": f"@{clean_ref}", "length": len(text), "submitted": submit}
+    return {"status": "typed", "ref": f"@{clean_ref}", "length": len(text), "submitted": submit, **detail}
 
 
 async def _do_select(page_id: str, ref: str, value=None, label=None, index=None) -> dict:
@@ -441,6 +488,135 @@ async def _do_check(page_id: str, ref: str, checked: bool) -> dict:
     return {"status": "checked" if checked else "unchecked", "ref": f"@{clean_ref}"}
 
 
+async def _do_extract_links(page_id: str, max_links: int = 500, include_hidden: bool = False) -> dict:
+    """Extract page links as structured data."""
+    page = _session.get_page(page_id)
+    safe_max = max(1, min(int(max_links), 2000))
+    links = await page.evaluate(
+        """({ maxLinks, includeHidden }) => {
+            const visible = (el) => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return includeHidden || (
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden'
+                );
+            };
+
+            return Array.from(document.querySelectorAll('a[href]'))
+                .filter((a) => visible(a) && !a.href.startsWith('javascript:'))
+                .slice(0, maxLinks)
+                .map((a, index) => ({
+                    index,
+                    text: (a.innerText || a.textContent || '').trim().slice(0, 300),
+                    href: a.href,
+                    title: a.title || '',
+                    target: a.target || '',
+                    rel: a.rel || '',
+                    visible: visible(a),
+                }));
+        }""",
+        {"maxLinks": safe_max, "includeHidden": include_hidden},
+    )
+    return {"count": len(links), "links": links}
+
+
+async def _do_get_images(page_id: str, max_images: int = 500, include_data_urls: bool = False) -> dict:
+    """Extract page images as structured data."""
+    page = _session.get_page(page_id)
+    safe_max = max(1, min(int(max_images), 2000))
+    images = await page.evaluate(
+        """({ maxImages, includeDataUrls }) => {
+            const visible = (el) => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden';
+            };
+
+            return Array.from(document.querySelectorAll('img'))
+                .map((img, index) => {
+                    const src = img.currentSrc || img.src || img.dataset.src || '';
+                    return {
+                        index,
+                        src,
+                        alt: img.alt || '',
+                        title: img.title || '',
+                        width: img.width || 0,
+                        height: img.height || 0,
+                        natural_width: img.naturalWidth || 0,
+                        natural_height: img.naturalHeight || 0,
+                        loading: img.loading || '',
+                        visible: visible(img),
+                    };
+                })
+                .filter((img) => img.src && (includeDataUrls || !img.src.startsWith('data:')))
+                .slice(0, maxImages);
+        }""",
+        {"maxImages": safe_max, "includeDataUrls": include_data_urls},
+    )
+    return {"count": len(images), "images": images}
+
+
+async def _do_wait_for_text(
+    page_id: str,
+    text: str,
+    timeout_ms: int = 10000,
+    exact: bool = False,
+    case_sensitive: bool = False,
+) -> dict:
+    """Wait until page body contains text."""
+    page = _session.get_page(page_id)
+    safe_timeout = max(100, min(int(timeout_ms), 120000))
+    await page.wait_for_function(
+        """({ text, exact, caseSensitive }) => {
+            const body = document.body;
+            if (!body) return false;
+            let haystack = body.innerText || body.textContent || '';
+            let needle = text;
+            if (!caseSensitive) {
+                haystack = haystack.toLowerCase();
+                needle = needle.toLowerCase();
+            }
+            if (!exact) return haystack.includes(needle);
+            return haystack
+                .split(/\\n+/)
+                .map((line) => line.trim())
+                .some((line) => line === needle);
+        }""",
+        {"text": text, "exact": exact, "caseSensitive": case_sensitive},
+        timeout=safe_timeout,
+    )
+    return {
+        "status": "found",
+        "text": text,
+        "timeout_ms": safe_timeout,
+        "exact": exact,
+        "case_sensitive": case_sensitive,
+    }
+
+
+async def _do_wait_for_ref(
+    page_id: str,
+    ref: str,
+    state: str = "visible",
+    timeout_ms: int = 10000,
+) -> dict:
+    """Wait for a referenced element state."""
+    page = _session.get_page(page_id)
+    clean_ref, selector = resolve_ref(_session, page_id, ref)
+    safe_timeout = max(100, min(int(timeout_ms), 120000))
+    if state not in {"attached", "detached", "visible", "hidden"}:
+        return _err("state must be one of: attached, detached, visible, hidden.")
+
+    await page.locator(selector).wait_for(state=state, timeout=safe_timeout)
+    return {"status": "ready", "ref": f"@{clean_ref}", "state": state, "timeout_ms": safe_timeout}
+
+
 # ---------------------------------------------------------------------------
 # Server creation
 # ---------------------------------------------------------------------------
@@ -476,7 +652,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     )
 
     # ===================================================================
-    # CORE TOOLS (~21)
+    # CORE TOOLS (~25)
     # ===================================================================
 
     # --- Browser lifecycle ---
@@ -587,11 +763,15 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         text: str,
         clear: bool = True,
         submit: bool = False,
+        humanize: bool = True,
+        min_delay_ms: int = 35,
+        max_delay_ms: int = 140,
     ) -> dict[str, Any]:
         """Type text into an input by its [@eN] ref ID from browser_snapshot.
 
-        Clears the field first by default. Set submit=True to press Enter after.
-        Returns an updated snapshot.
+        Humanized by default: clicks the field, clears with keyboard shortcuts,
+        and types with uneven per-character timing. Set submit=True to press
+        Enter after typing. Returns an updated snapshot.
 
         Args:
             page_id: Target page ID.
@@ -599,8 +779,21 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
             text: Text to type.
             clear: Clear field before typing (default: True).
             submit: Press Enter after typing (default: False).
+            humanize: Use human-like keyboard timing instead of direct type.
+            min_delay_ms: Minimum per-character delay when humanized.
+            max_delay_ms: Maximum per-character delay when humanized.
         """
-        return await _safe_snap(_do_type, page_id, ref, text, clear, submit)
+        return await _safe_snap(
+            _do_type,
+            page_id,
+            ref,
+            text,
+            clear,
+            submit,
+            humanize,
+            min_delay_ms,
+            max_delay_ms,
+        )
 
     @mcp.tool()
     async def browser_select(
@@ -700,6 +893,41 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         """
         page = _session.get_page(page_id)
         return await _safe(extract_markdown, page, max_length=max_length)
+
+    @mcp.tool()
+    async def browser_extract_links(
+        page_id: str,
+        max_links: int = 500,
+        include_hidden: bool = False,
+    ) -> dict[str, Any]:
+        """Extract links from the current page as structured JSON.
+
+        Best for search results, directories, navigation pages, and link audits.
+
+        Args:
+            page_id: Target page ID.
+            max_links: Max links to return, clamped to 1-2000.
+            include_hidden: Include links hidden by layout/CSS.
+        """
+        return await _safe(_do_extract_links, page_id, max_links, include_hidden)
+
+    @mcp.tool()
+    async def browser_get_images(
+        page_id: str,
+        max_images: int = 500,
+        include_data_urls: bool = False,
+    ) -> dict[str, Any]:
+        """Extract images from the current page as structured JSON.
+
+        Returns src, alt/title, rendered size, natural size, loading mode, and
+        visibility for each image.
+
+        Args:
+            page_id: Target page ID.
+            max_images: Max images to return, clamped to 1-2000.
+            include_data_urls: Include inline data: images.
+        """
+        return await _safe(_do_get_images, page_id, max_images, include_data_urls)
 
     @mcp.tool()
     async def browser_screenshot(
@@ -834,6 +1062,42 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         """
         page = _session.get_page(page_id)
         return await _safe(wait_for_settle, page, timeout_ms=timeout_ms)
+
+    @mcp.tool()
+    async def browser_wait_for_text(
+        page_id: str,
+        text: str,
+        timeout_ms: int = 10000,
+        exact: bool = False,
+        case_sensitive: bool = False,
+    ) -> dict[str, Any]:
+        """Wait until the visible page text contains the requested text.
+
+        Args:
+            page_id: Target page ID.
+            text: Text to wait for.
+            timeout_ms: Max wait time in milliseconds, clamped to 100-120000.
+            exact: Match a whole trimmed line instead of substring containment.
+            case_sensitive: Preserve case when matching.
+        """
+        return await _safe(_do_wait_for_text, page_id, text, timeout_ms, exact, case_sensitive)
+
+    @mcp.tool()
+    async def browser_wait_for_ref(
+        page_id: str,
+        ref: str,
+        state: str = "visible",
+        timeout_ms: int = 10000,
+    ) -> dict[str, Any]:
+        """Wait for an element ref to become visible/hidden/attached/detached.
+
+        Args:
+            page_id: Target page ID.
+            ref: Ref ID from snapshot.
+            state: One of visible, hidden, attached, detached.
+            timeout_ms: Max wait time in milliseconds, clamped to 100-120000.
+        """
+        return await _safe(_do_wait_for_ref, page_id, ref, state, timeout_ms)
 
     # --- JavaScript ---
 

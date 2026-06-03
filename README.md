@@ -104,7 +104,7 @@ All anti-detection features are **ON by default**:
 
 ## Tools
 
-### Core Tools (21 — always available)
+### Core Tools (25 — always available)
 
 | Tool | Description |
 |------|-------------|
@@ -112,12 +112,14 @@ All anti-detection features are **ON by default**:
 | `browser_close` | Close browser and release resources |
 | `browser_snapshot` | **PRIMARY** — accessibility tree with `[@eN]` refs |
 | `browser_click` | Click element by ref (auto-retry) |
-| `browser_type` | Type into input by ref (with submit option) |
+| `browser_type` | Humanized type into input by ref |
 | `browser_select` | Select dropdown option by ref |
 | `browser_hover` | Hover over element by ref |
 | `browser_drag` | Humanized drag from one ref to another |
 | `browser_check` | Check/uncheck checkbox by ref |
 | `browser_read_page` | Page content as clean markdown |
+| `browser_extract_links` | Extract page links as structured JSON |
+| `browser_get_images` | Extract page images as structured JSON |
 | `browser_screenshot` | Annotated screenshot with element indices |
 | `browser_navigate` | Go to URL (auto-waits for settle) |
 | `browser_back` | Navigate back in history |
@@ -125,6 +127,8 @@ All anti-detection features are **ON by default**:
 | `browser_press_key` | Press keyboard key |
 | `browser_scroll` | Scroll page up/down |
 | `browser_wait` | Wait for page to settle |
+| `browser_wait_for_text` | Wait for page text to appear |
+| `browser_wait_for_ref` | Wait for an element ref state |
 | `browser_evaluate` | Execute JavaScript in page |
 | `browser_new_page` | Open new page/tab |
 | `browser_list_pages` | List all open pages |

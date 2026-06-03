@@ -26,11 +26,12 @@ class TestToolRegistration:
     EXPECTED_TOOLS = [
         "browser_launch", "browser_close", "browser_snapshot", "browser_click",
         "browser_type", "browser_select", "browser_hover", "browser_drag",
-        "browser_check", "browser_read_page", "browser_screenshot",
-        "browser_navigate", "browser_back", "browser_forward",
-        "browser_press_key", "browser_scroll", "browser_wait",
-        "browser_evaluate", "browser_new_page", "browser_list_pages",
-        "browser_close_page",
+        "browser_check", "browser_read_page", "browser_extract_links",
+        "browser_get_images", "browser_screenshot", "browser_navigate",
+        "browser_back", "browser_forward", "browser_press_key",
+        "browser_scroll", "browser_wait", "browser_wait_for_text",
+        "browser_wait_for_ref", "browser_evaluate", "browser_new_page",
+        "browser_list_pages", "browser_close_page",
     ]
 
     def test_all_tools_registered(self):
@@ -90,3 +91,17 @@ class TestToolSchemas:
 
         drag_tool = tools["browser_drag"]
         assert drag_tool is not None
+
+    def test_structured_read_tools_exist(self):
+        server = create_server()
+        tools = server._tool_manager._tools
+
+        assert tools["browser_extract_links"] is not None
+        assert tools["browser_get_images"] is not None
+
+    def test_precise_wait_tools_exist(self):
+        server = create_server()
+        tools = server._tool_manager._tools
+
+        assert tools["browser_wait_for_text"] is not None
+        assert tools["browser_wait_for_ref"] is not None
