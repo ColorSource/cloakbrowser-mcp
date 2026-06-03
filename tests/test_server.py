@@ -24,15 +24,13 @@ class TestToolRegistration:
     """Test all expected tools are registered on the server."""
 
     EXPECTED_TOOLS = [
-        "launch_browser", "close_browser", "new_page", "close_page", "list_pages",
-        "snapshot", "click_ref", "type_ref", "hover_ref", "select_ref", "check_ref",
-        "navigate", "go_back", "go_forward", "reload", "wait_for_navigation",
-        "click", "smart_action", "type_text", "fill_form", "hover", "select_option",
-        "press_key", "scroll",
-        "get_text", "get_links", "get_form_fields", "screenshot", "get_content",
-        "evaluate", "wait_for_selector", "get_console", "get_cookies", "set_cookies",
-        "get_page_info", "pdf", "set_viewport", "emulate_media",
-        "network_intercept", "network_continue", "add_init_script", "stealth_config", "binary_info",
+        "browser_launch", "browser_close", "browser_snapshot", "browser_click",
+        "browser_type", "browser_select", "browser_hover", "browser_drag",
+        "browser_check", "browser_read_page", "browser_screenshot",
+        "browser_navigate", "browser_back", "browser_forward",
+        "browser_press_key", "browser_scroll", "browser_wait",
+        "browser_evaluate", "browser_new_page", "browser_list_pages",
+        "browser_close_page",
     ]
 
     def test_all_tools_registered(self):
@@ -58,30 +56,37 @@ class TestToolRegistration:
 class TestToolSchemas:
     """Test that tool input schemas are properly defined."""
 
-    def test_launch_browser_schema(self):
+    def test_browser_launch_schema(self):
         server = create_server()
         tools = server._tool_manager._tools
 
-        launch_tool = tools["launch_browser"]
+        launch_tool = tools["browser_launch"]
         assert launch_tool is not None
 
     def test_navigate_requires_url(self):
         server = create_server()
         tools = server._tool_manager._tools
 
-        nav_tool = tools["navigate"]
+        nav_tool = tools["browser_navigate"]
         assert nav_tool is not None
 
     def test_snapshot_tool_exists(self):
         server = create_server()
         tools = server._tool_manager._tools
 
-        snapshot_tool = tools["snapshot"]
+        snapshot_tool = tools["browser_snapshot"]
         assert snapshot_tool is not None
 
-    def test_click_ref_tool_exists(self):
+    def test_browser_click_tool_exists(self):
         server = create_server()
         tools = server._tool_manager._tools
 
-        click_ref_tool = tools["click_ref"]
+        click_ref_tool = tools["browser_click"]
         assert click_ref_tool is not None
+
+    def test_browser_drag_tool_exists(self):
+        server = create_server()
+        tools = server._tool_manager._tools
+
+        drag_tool = tools["browser_drag"]
+        assert drag_tool is not None

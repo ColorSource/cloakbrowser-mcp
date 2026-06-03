@@ -44,7 +44,7 @@ cd CloakMCP && pip install -e ".[dev]"
 - All dependencies resolved: mcp>=1.0, cloakbrowser>=0.3, playwright>=1.40
 - Dev dependencies: pytest, pytest-asyncio, pytest-mock, ruff
 - Package registered as `cloakbrowsermcp==0.1.0`
-- Entry point `cloakbrowsermcp` CLI created
+- Entry point `cloakbrowser-mcp` CLI created
 
 ### 2.2 MCP config integration
 Added to `~/.hermes/config.yaml`:

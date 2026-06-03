@@ -37,7 +37,7 @@ Add to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "cloakbrowser": {
-      "command": "cloakbrowsermcp"
+      "command": "cloakbrowser-mcp"
     }
   }
 }
@@ -51,7 +51,7 @@ Add to `.vscode/mcp.json`:
 {
   "servers": {
     "cloakbrowser": {
-      "command": "cloakbrowsermcp",
+      "command": "cloakbrowser-mcp",
       "args": ["--caps", "all"]
     }
   }
@@ -65,7 +65,7 @@ Add to `~/.hermes/config.yaml`:
 ```yaml
 mcp_servers:
   cloakbrowser:
-    command: cloakbrowsermcp
+    command: cloakbrowser-mcp
     args: ["--caps", "all"]
     timeout: 120
 ```
@@ -77,22 +77,22 @@ mcp_servers:
 CloakBrowser MCP uses **accessibility tree snapshots** as the primary way for AI models to understand web pages — not screenshots, not raw HTML.
 
 ```
-1. cloak_launch()           → Start stealth browser
-2. cloak_navigate(pid, url) → Go to page (auto-waits for settle)
-3. cloak_snapshot(pid)      → Get interactive elements with [@eN] refs
-4. cloak_click(pid, '@e5')  → Click element by ref
-5. cloak_type(pid, '@e3', 'hello')  → Type into input
-6. cloak_read_page(pid)     → Get content as clean markdown
-7. cloak_close()            → Done
+1. browser_launch()           → Start stealth browser
+2. browser_navigate(pid, url) → Go to page (auto-waits for settle)
+3. browser_snapshot(pid)      → Get interactive elements with [@eN] refs
+4. browser_click(pid, '@e5')  → Click element by ref
+5. browser_type(pid, '@e3', 'hello')  → Type into input
+6. browser_read_page(pid)     → Get content as clean markdown
+7. browser_close()            → Done
 ```
 
 Each interactive element gets a `[@eN]` ref ID. All interaction tools use these refs — no CSS selectors needed.
 
 ### Three Ways to See a Page
 
-1. **`cloak_snapshot()`** — Accessibility tree with `[@eN]` refs. Fast, cheap, reliable. **Use this.**
-2. **`cloak_read_page()`** — Clean markdown extraction. For reading content, not interacting.
-3. **`cloak_screenshot()`** — Annotated screenshot with element indices. For visual context (images, charts, CAPTCHAs).
+1. **`browser_snapshot()`** — Accessibility tree with `[@eN]` refs. Fast, cheap, reliable. **Use this.**
+2. **`browser_read_page()`** — Clean markdown extraction. For reading content, not interacting.
+3. **`browser_screenshot()`** — Annotated screenshot with element indices. For visual context (images, charts, CAPTCHAs).
 
 ### Stealth by Default
 
@@ -104,50 +104,51 @@ All anti-detection features are **ON by default**:
 
 ## Tools
 
-### Core Tools (20 — always available)
+### Core Tools (21 — always available)
 
 | Tool | Description |
 |------|-------------|
-| `cloak_launch` | Start stealth browser (all anti-detection ON) |
-| `cloak_close` | Close browser and release resources |
-| `cloak_snapshot` | **PRIMARY** — accessibility tree with `[@eN]` refs |
-| `cloak_click` | Click element by ref (auto-retry) |
-| `cloak_type` | Type into input by ref (with submit option) |
-| `cloak_select` | Select dropdown option by ref |
-| `cloak_hover` | Hover over element by ref |
-| `cloak_check` | Check/uncheck checkbox by ref |
-| `cloak_read_page` | Page content as clean markdown |
-| `cloak_screenshot` | Annotated screenshot with element indices |
-| `cloak_navigate` | Go to URL (auto-waits for settle) |
-| `cloak_back` | Navigate back in history |
-| `cloak_forward` | Navigate forward in history |
-| `cloak_press_key` | Press keyboard key |
-| `cloak_scroll` | Scroll page up/down |
-| `cloak_wait` | Wait for page to settle |
-| `cloak_evaluate` | Execute JavaScript in page |
-| `cloak_new_page` | Open new page/tab |
-| `cloak_list_pages` | List all open pages |
-| `cloak_close_page` | Close a specific page |
+| `browser_launch` | Start stealth browser (all anti-detection ON) |
+| `browser_close` | Close browser and release resources |
+| `browser_snapshot` | **PRIMARY** — accessibility tree with `[@eN]` refs |
+| `browser_click` | Click element by ref (auto-retry) |
+| `browser_type` | Type into input by ref (with submit option) |
+| `browser_select` | Select dropdown option by ref |
+| `browser_hover` | Hover over element by ref |
+| `browser_drag` | Humanized drag from one ref to another |
+| `browser_check` | Check/uncheck checkbox by ref |
+| `browser_read_page` | Page content as clean markdown |
+| `browser_screenshot` | Annotated screenshot with element indices |
+| `browser_navigate` | Go to URL (auto-waits for settle) |
+| `browser_back` | Navigate back in history |
+| `browser_forward` | Navigate forward in history |
+| `browser_press_key` | Press keyboard key |
+| `browser_scroll` | Scroll page up/down |
+| `browser_wait` | Wait for page to settle |
+| `browser_evaluate` | Execute JavaScript in page |
+| `browser_new_page` | Open new page/tab |
+| `browser_list_pages` | List all open pages |
+| `browser_close_page` | Close a specific page |
 
 ### Capability-Gated Tools (enabled via `--caps`)
 
-Enable with `cloakbrowsermcp --caps network,cookies,pdf,console` or `--caps all`.
+Enable with `cloakbrowser-mcp --caps network,cookies,pdf,console` or `--caps all`.
 
 | Tool | Capability | Description |
 |------|-----------|-------------|
-| `cloak_network_intercept` | network | Block/mock/passthrough requests |
-| `cloak_network_continue` | network | Remove interception rule |
-| `cloak_get_cookies` | cookies | Get all cookies |
-| `cloak_set_cookies` | cookies | Set cookies |
-| `cloak_pdf` | pdf | Save page as PDF |
-| `cloak_console` | console | Get browser console output |
+| `browser_network_intercept` | network | Block/mock/passthrough requests |
+| `browser_network_continue` | network | Remove interception rule |
+| `browser_get_cookies` | cookies | Get all cookies |
+| `browser_set_cookies` | cookies | Set cookies |
+| `browser_pdf` | pdf | Save page as PDF |
+| `browser_console` | console | Get browser console output |
 
 ## Configuration
 
 ### CLI Options
 
 ```
-cloakbrowsermcp [--caps CAPS] [--transport {stdio,sse}] [--port PORT]
+cloakbrowser-mcp [--caps CAPS] [--transport {stdio,sse}] [--port PORT]
 ```
 
 - `--caps`: Comma-separated capabilities: `network`, `cookies`, `pdf`, `console`, `all`
@@ -165,7 +166,7 @@ cloakbrowsermcp [--caps CAPS] [--transport {stdio,sse}] [--port PORT]
 ### Launch Options
 
 ```python
-cloak_launch(
+browser_launch(
     headless=True,        # False for headed mode (some sites require it)
     proxy="http://...",   # Residential proxy recommended
     humanize=True,        # Human-like input (ON by default)
@@ -196,7 +197,7 @@ cloakbrowsermcp/
 
 ### Design Principles
 
-1. **Snapshot-first** — Tool descriptions steer models to use `cloak_snapshot()` as the primary page understanding tool
+1. **Snapshot-first** — Tool descriptions steer models to use `browser_snapshot()` as the primary page understanding tool
 2. **Ref-based only** — No CSS selector tools. All interaction via `[@eN]` refs from snapshots
 3. **Stealth by default** — Anti-detection, humanization, and stealth args all ON without configuration
 4. **Auto-snapshot after actions** — Click, type, navigate all return an updated snapshot

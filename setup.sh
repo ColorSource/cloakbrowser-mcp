@@ -107,7 +107,7 @@ else
 fi
 
 # ─── Write wrapper script ──────────────────────────────────────────────
-WRAPPER="$INSTALL_DIR/bin/cloakbrowsermcp"
+WRAPPER="$INSTALL_DIR/bin/cloakbrowser-mcp"
 mkdir -p "$INSTALL_DIR/bin"
 cat > "$WRAPPER" << 'WRAPPER_EOF'
 #!/usr/bin/env bash
@@ -120,7 +120,7 @@ chmod +x "$WRAPPER"
 # ─── Shell PATH hint ───────────────────────────────────────────────────
 BIN_DIR="$INSTALL_DIR/bin"
 if echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
-    ok "cloakbrowsermcp is on your PATH"
+    ok "cloakbrowser-mcp is on your PATH"
 else
     # Detect shell config file
     SHELL_RC=""
@@ -146,7 +146,7 @@ echo ""
 echo -e "${GREEN}${BOLD}✓ CloakBrowserMCP is ready!${NC}"
 echo ""
 echo -e "  ${BOLD}Run the server:${NC}"
-echo "    cloakbrowsermcp"
+echo "    cloakbrowser-mcp"
 echo ""
 echo -e "  ${BOLD}Claude Desktop / Claude Code config:${NC}"
 echo "    {"

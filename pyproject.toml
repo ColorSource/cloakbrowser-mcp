@@ -59,7 +59,7 @@ dev = [
 ]
 
 [project.scripts]
-cloakbrowsermcp = "cloakbrowsermcp.server:main"
+cloakbrowser-mcp = "cloakbrowsermcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/overtimepog/CloakMCP"

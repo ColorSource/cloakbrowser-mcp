@@ -4,14 +4,16 @@ A clean, focused MCP server that combines CloakBrowser's anti-detection
 with Playwright MCP-inspired architecture: snapshot-first navigation,
 ref-based interaction, clean markdown extraction, and annotated screenshots.
 
-~20 core tools. Stealth by default. No CSS selector tools.
+~21 core tools. Stealth by default. No CSS selector tools.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import random
 import sys
 from pathlib import Path
 from typing import Any
@@ -104,15 +106,15 @@ async def _safe(handler, *args, **kwargs) -> dict[str, Any]:
     except (PageNotFoundError, PageClosedError, BrowserSessionError) as e:
         return _err(str(e))
     except KeyError as e:
-        return _err(str(e), hint="Call cloak_snapshot() first to get fresh ref IDs.")
+        return _err(str(e), hint="Call browser_snapshot() first to get fresh ref IDs.")
     except Exception as e:
         err_str = str(e).lower()
         if any(kw in err_str for kw in ("closed", "crashed", "disconnected", "not connected")):
             _session._force_cleanup()
             logger.warning("Browser connection lost: %s", e)
             return _err(
-                f"Browser session lost. Call cloak_launch() to start a new session.",
-                hint="Call cloak_launch() to restart.",
+                f"Browser session lost. Call browser_launch() to start a new session.",
+                hint="Call browser_launch() to restart.",
             )
         logger.exception("Tool error: %s", type(e).__name__)
         return _err(f"{type(e).__name__}: {e}")
@@ -145,12 +147,12 @@ async def _safe_snap(handler, *args, **kwargs) -> dict[str, Any]:
     except (PageNotFoundError, PageClosedError, BrowserSessionError) as e:
         return _err(str(e))
     except KeyError as e:
-        return _err(str(e), hint="Call cloak_snapshot() first to get fresh ref IDs.")
+        return _err(str(e), hint="Call browser_snapshot() first to get fresh ref IDs.")
     except Exception as e:
         err_str = str(e).lower()
         if any(kw in err_str for kw in ("closed", "crashed", "disconnected", "not connected")):
             _session._force_cleanup()
-            return _err("Browser session lost. Call cloak_launch() to restart.")
+            return _err("Browser session lost. Call browser_launch() to restart.")
         logger.exception("Tool error: %s", type(e).__name__)
         return _err(f"{type(e).__name__}: {e}")
 
@@ -215,7 +217,7 @@ async def _do_launch(params: dict) -> dict:
         "page_id": page_id,
         "stealth": True,
         "humanize": cfg.humanize,
-        "hint": "Next: call cloak_navigate(page_id, url) to visit a page.",
+        "hint": "Next: call browser_navigate(page_id, url) to visit a page.",
     }
 
 
@@ -285,6 +287,147 @@ async def _do_hover(page_id: str, ref: str) -> dict:
     return {"status": "hovered", "ref": f"@{clean_ref}"}
 
 
+def _point_inside_box(box: dict[str, float]) -> tuple[float, float]:
+    """Pick a non-center point inside an element box."""
+    x = float(box["x"])
+    y = float(box["y"])
+    width = max(float(box["width"]), 1.0)
+    height = max(float(box["height"]), 1.0)
+
+    def _axis(origin: float, size: float) -> float:
+        if size <= 4:
+            return origin + size / 2
+        inset = min(size * 0.25, 12)
+        return origin + random.uniform(inset, max(inset, size - inset))
+
+    return _axis(x, width), _axis(y, height)
+
+
+def _bezier_point(
+    start: tuple[float, float],
+    control_1: tuple[float, float],
+    control_2: tuple[float, float],
+    end: tuple[float, float],
+    t: float,
+) -> tuple[float, float]:
+    inv = 1 - t
+    x = (
+        inv**3 * start[0]
+        + 3 * inv**2 * t * control_1[0]
+        + 3 * inv * t**2 * control_2[0]
+        + t**3 * end[0]
+    )
+    y = (
+        inv**3 * start[1]
+        + 3 * inv**2 * t * control_1[1]
+        + 3 * inv * t**2 * control_2[1]
+        + t**3 * end[1]
+    )
+    return x, y
+
+
+async def _humanized_drag(page, source_locator, target_locator, duration_ms: int, steps: int) -> dict:
+    """Drag with a curved, uneven mouse path."""
+    safe_duration_ms = max(250, min(int(duration_ms), 5000))
+    safe_steps = max(8, min(int(steps), 80))
+
+    await source_locator.wait_for(state="visible", timeout=5000)
+    await target_locator.wait_for(state="visible", timeout=5000)
+
+    source_box = await source_locator.bounding_box()
+    target_box = await target_locator.bounding_box()
+    if not source_box:
+        raise ValueError("Source element has no visible bounding box.")
+    if not target_box:
+        raise ValueError("Target element has no visible bounding box.")
+
+    start = _point_inside_box(source_box)
+    end = _point_inside_box(target_box)
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    curve = random.choice([-1, 1]) * random.uniform(20, 80)
+    control_1 = (
+        start[0] + dx * random.uniform(0.20, 0.38) - dy * 0.04,
+        start[1] + dy * random.uniform(0.15, 0.35) + curve,
+    )
+    control_2 = (
+        start[0] + dx * random.uniform(0.62, 0.85) + dy * 0.04,
+        start[1] + dy * random.uniform(0.65, 0.90) - curve * random.uniform(0.35, 0.75),
+    )
+
+    mouse_down = False
+    try:
+        await page.mouse.move(start[0], start[1])
+        await asyncio.sleep(random.uniform(0.08, 0.22))
+        await page.mouse.down()
+        mouse_down = True
+        await asyncio.sleep(random.uniform(0.05, 0.16))
+
+        base_delay = safe_duration_ms / safe_steps / 1000
+        for i in range(1, safe_steps + 1):
+            t = i / safe_steps
+            eased = t * t * (3 - 2 * t)
+            x, y = _bezier_point(start, control_1, control_2, end, eased)
+            if i < safe_steps:
+                jitter = max(0.35, 2.4 * (1 - t))
+                x += random.uniform(-jitter, jitter)
+                y += random.uniform(-jitter, jitter)
+            await page.mouse.move(x, y)
+            await asyncio.sleep(max(0.004, base_delay * random.uniform(0.55, 1.45)))
+
+        await asyncio.sleep(random.uniform(0.05, 0.14))
+        await page.mouse.up()
+        mouse_down = False
+        return {"mode": "humanized", "steps": safe_steps, "duration_ms": safe_duration_ms}
+    except Exception:
+        if mouse_down:
+            try:
+                await page.mouse.up()
+            except Exception:
+                pass
+        raise
+
+
+async def _do_drag(
+    page_id: str,
+    source_ref: str,
+    target_ref: str,
+    humanize: bool = True,
+    duration_ms: int = 700,
+    steps: int = 24,
+    fallback: bool = True,
+) -> dict:
+    """Drag one element to another by refs."""
+    page = _session.get_page(page_id)
+    clean_source_ref, source_selector = resolve_ref(_session, page_id, source_ref)
+    clean_target_ref, target_selector = resolve_ref(_session, page_id, target_ref)
+
+    async def _drag():
+        source_locator = page.locator(source_selector)
+        target_locator = page.locator(target_selector)
+        detail = {}
+        if humanize:
+            try:
+                detail = await _humanized_drag(page, source_locator, target_locator, duration_ms, steps)
+            except Exception as e:
+                if not fallback:
+                    raise
+                logger.debug("Humanized drag failed, falling back to drag_to: %s", e)
+
+        if not humanize or (humanize and not detail):
+            await source_locator.drag_to(target_locator, timeout=5000)
+            detail = {"mode": "drag_to"}
+
+        return {
+            "status": "dragged",
+            "source_ref": f"@{clean_source_ref}",
+            "target_ref": f"@{clean_target_ref}",
+            **detail,
+        }
+
+    return await retry_action(_drag, max_retries=1)
+
+
 async def _do_check(page_id: str, ref: str, checked: bool) -> dict:
     """Check/uncheck checkbox by ref."""
     page = _session.get_page(page_id)
@@ -316,30 +459,30 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
             "CloakBrowser — stealth browser automation with anti-detection. "
             "Source-patched Chromium that passes Cloudflare, reCAPTCHA, FingerprintJS.\n\n"
             "WORKFLOW:\n"
-            "1. cloak_launch() — start stealth browser (auto-creates first page)\n"
-            "2. cloak_navigate(page_id, url) — go to a URL (auto-waits for page settle)\n"
-            "3. cloak_snapshot(page_id) — get interactive elements with [@eN] ref IDs\n"
-            "4. cloak_click(page_id, '@e5') — click by ref from snapshot\n"
-            "5. cloak_type(page_id, '@e3', 'text') — type by ref from snapshot\n"
-            "6. cloak_read_page(page_id) — get page content as clean markdown\n"
-            "7. cloak_close() — close browser when done\n\n"
+            "1. browser_launch() — start stealth browser (auto-creates first page)\n"
+            "2. browser_navigate(page_id, url) — go to a URL (auto-waits for page settle)\n"
+            "3. browser_snapshot(page_id) — get interactive elements with [@eN] ref IDs\n"
+            "4. browser_click(page_id, '@e5') — click by ref from snapshot\n"
+            "5. browser_type(page_id, '@e3', 'text') — type by ref from snapshot\n"
+            "6. browser_read_page(page_id) — get page content as clean markdown\n"
+            "7. browser_close() — close browser when done\n\n"
             "IMPORTANT:\n"
-            "- cloak_snapshot() is the PRIMARY way to understand pages. Call it first.\n"
+            "- browser_snapshot() is the PRIMARY way to understand pages. Call it first.\n"
             "- All interaction uses [@eN] ref IDs from snapshot. No CSS selectors.\n"
-            "- cloak_read_page() returns clean markdown for reading content.\n"
-            "- cloak_screenshot() returns annotated screenshots with element indices.\n"
+            "- browser_read_page() returns clean markdown for reading content.\n"
+            "- browser_screenshot() returns annotated screenshots with element indices.\n"
             "- Action tools auto-return an updated snapshot."
         ),
     )
 
     # ===================================================================
-    # CORE TOOLS (~20)
+    # CORE TOOLS (~21)
     # ===================================================================
 
     # --- Browser lifecycle ---
 
     @mcp.tool()
-    async def cloak_launch(
+    async def browser_launch(
         headless: bool = True,
         proxy: str | None = None,
         humanize: bool = True,
@@ -389,7 +532,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         })
 
     @mcp.tool()
-    async def cloak_close() -> dict[str, Any]:
+    async def browser_close() -> dict[str, Any]:
         """Close the stealth browser and release all resources. Always call when done."""
         if not _session.is_running:
             return {"status": "not_running"}
@@ -399,24 +542,24 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- Snapshot (PRIMARY page understanding) ---
 
     @mcp.tool()
-    async def cloak_snapshot(
+    async def browser_snapshot(
         page_id: str,
         full: bool = False,
         max_length: int = 12000,
     ) -> dict[str, Any]:
         """Capture the page's accessibility tree — the PRIMARY way to understand pages.
 
-        Returns interactive elements with [@eN] ref IDs for use with cloak_click,
-        cloak_type, cloak_select, etc. Call this BEFORE interacting with a page.
+        Returns interactive elements with [@eN] ref IDs for use with browser_click,
+        browser_type, browser_select, browser_drag, etc. Call this BEFORE interacting with a page.
 
         full=False (default): interactive elements only — compact and fast.
         full=True: includes surrounding text content for reading context.
 
         This is FASTER, CHEAPER, and MORE RELIABLE than screenshots.
-        Always prefer this over cloak_screenshot for deciding what to click.
+        Always prefer this over browser_screenshot for deciding what to click.
 
         Args:
-            page_id: Target page ID from cloak_launch or cloak_new_page.
+            page_id: Target page ID from browser_launch or browser_new_page.
             full: Include text content alongside interactive elements.
             max_length: Max characters to return (default: 12000).
         """
@@ -426,8 +569,8 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- Ref-based interaction ---
 
     @mcp.tool()
-    async def cloak_click(page_id: str, ref: str) -> dict[str, Any]:
-        """Click an element by its [@eN] ref ID from cloak_snapshot.
+    async def browser_click(page_id: str, ref: str) -> dict[str, Any]:
+        """Click an element by its [@eN] ref ID from browser_snapshot.
 
         Auto-retries once if the element moved. Returns an updated snapshot.
 
@@ -438,14 +581,14 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe_snap(_do_click, page_id, ref)
 
     @mcp.tool()
-    async def cloak_type(
+    async def browser_type(
         page_id: str,
         ref: str,
         text: str,
         clear: bool = True,
         submit: bool = False,
     ) -> dict[str, Any]:
-        """Type text into an input by its [@eN] ref ID from cloak_snapshot.
+        """Type text into an input by its [@eN] ref ID from browser_snapshot.
 
         Clears the field first by default. Set submit=True to press Enter after.
         Returns an updated snapshot.
@@ -460,7 +603,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe_snap(_do_type, page_id, ref, text, clear, submit)
 
     @mcp.tool()
-    async def cloak_select(
+    async def browser_select(
         page_id: str,
         ref: str,
         value: str | None = None,
@@ -481,7 +624,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe_snap(_do_select, page_id, ref, value, label, index)
 
     @mcp.tool()
-    async def cloak_hover(page_id: str, ref: str) -> dict[str, Any]:
+    async def browser_hover(page_id: str, ref: str) -> dict[str, Any]:
         """Hover over an element by ref ID. Returns an updated snapshot.
 
         Args:
@@ -491,7 +634,44 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe_snap(_do_hover, page_id, ref)
 
     @mcp.tool()
-    async def cloak_check(page_id: str, ref: str, checked: bool = True) -> dict[str, Any]:
+    async def browser_drag(
+        page_id: str,
+        source_ref: str,
+        target_ref: str,
+        humanize: bool = True,
+        duration_ms: int = 700,
+        steps: int = 24,
+        fallback: bool = True,
+    ) -> dict[str, Any]:
+        """Drag one element to another by their [@eN] ref IDs from browser_snapshot.
+
+        Humanized by default: picks non-center points, follows a curved uneven mouse
+        path, and uses randomized timing. If that fails, fallback=True retries with
+        Playwright's native drag_to for HTML5 drag-and-drop compatibility.
+        Returns an updated snapshot.
+
+        Args:
+            page_id: Target page ID.
+            source_ref: Ref ID of the element to drag.
+            target_ref: Ref ID of the drop target.
+            humanize: Use human-like mouse movement instead of direct drag_to.
+            duration_ms: Approximate humanized drag duration, clamped to 250-5000 ms.
+            steps: Number of mouse movement points, clamped to 8-80.
+            fallback: Retry with Playwright drag_to if humanized drag fails.
+        """
+        return await _safe_snap(
+            _do_drag,
+            page_id,
+            source_ref,
+            target_ref,
+            humanize,
+            duration_ms,
+            steps,
+            fallback,
+        )
+
+    @mcp.tool()
+    async def browser_check(page_id: str, ref: str, checked: bool = True) -> dict[str, Any]:
         """Check or uncheck a checkbox/radio by ref ID. Returns an updated snapshot.
 
         Args:
@@ -504,7 +684,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- Content extraction ---
 
     @mcp.tool()
-    async def cloak_read_page(
+    async def browser_read_page(
         page_id: str,
         max_length: int = 50000,
     ) -> dict[str, Any]:
@@ -522,15 +702,15 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe(extract_markdown, page, max_length=max_length)
 
     @mcp.tool()
-    async def cloak_screenshot(
+    async def browser_screenshot(
         page_id: str,
         full_page: bool = False,
     ) -> dict[str, Any]:
         """Take an annotated screenshot with element indices overlaid.
 
-        Each numbered element maps to [@eN] refs from cloak_snapshot.
+        Each numbered element maps to [@eN] refs from browser_snapshot.
         Use when you need VISUAL context — images, charts, CAPTCHAs, or layout.
-        For most interactions, prefer cloak_snapshot() instead.
+        For most interactions, prefer browser_snapshot() instead.
 
         Returns: file path to saved PNG, element count.
 
@@ -544,7 +724,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- Navigation ---
 
     @mcp.tool()
-    async def cloak_navigate(
+    async def browser_navigate(
         page_id: str,
         url: str,
         timeout: int = 30000,
@@ -562,7 +742,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe_snap(_do_navigate, page_id, url, timeout)
 
     @mcp.tool()
-    async def cloak_back(page_id: str) -> dict[str, Any]:
+    async def browser_back(page_id: str) -> dict[str, Any]:
         """Navigate back in browser history. Returns an updated snapshot.
 
         Args:
@@ -578,7 +758,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe_snap(_go_back, page_id)
 
     @mcp.tool()
-    async def cloak_forward(page_id: str) -> dict[str, Any]:
+    async def browser_forward(page_id: str) -> dict[str, Any]:
         """Navigate forward in browser history. Returns an updated snapshot.
 
         Args:
@@ -596,7 +776,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- Keyboard & scroll ---
 
     @mcp.tool()
-    async def cloak_press_key(
+    async def browser_press_key(
         page_id: str,
         key: str,
     ) -> dict[str, Any]:
@@ -616,7 +796,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe_snap(_press, page_id, key)
 
     @mcp.tool()
-    async def cloak_scroll(
+    async def browser_scroll(
         page_id: str,
         direction: str = "down",
         amount: int = 500,
@@ -639,7 +819,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- Wait ---
 
     @mcp.tool()
-    async def cloak_wait(
+    async def browser_wait(
         page_id: str,
         timeout_ms: int = 5000,
     ) -> dict[str, Any]:
@@ -658,7 +838,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- JavaScript ---
 
     @mcp.tool()
-    async def cloak_evaluate(page_id: str, expression: str) -> dict[str, Any]:
+    async def browser_evaluate(page_id: str, expression: str) -> dict[str, Any]:
         """Execute JavaScript in the page context and return the result.
 
         Args:
@@ -682,7 +862,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     # --- Page management ---
 
     @mcp.tool()
-    async def cloak_new_page(url: str | None = None) -> dict[str, Any]:
+    async def browser_new_page(url: str | None = None) -> dict[str, Any]:
         """Open a new browser page/tab. Optionally navigate to a URL.
 
         Args:
@@ -698,12 +878,12 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return await _safe(_new, url)
 
     @mcp.tool()
-    async def cloak_list_pages() -> dict[str, Any]:
+    async def browser_list_pages() -> dict[str, Any]:
         """List all open pages with their IDs and URLs."""
         return {"pages": _session.list_pages()}
 
     @mcp.tool()
-    async def cloak_close_page(page_id: str) -> dict[str, Any]:
+    async def browser_close_page(page_id: str) -> dict[str, Any]:
         """Close a specific page by ID.
 
         Args:
@@ -722,7 +902,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     if "network" in _capabilities or "all" in _capabilities:
 
         @mcp.tool()
-        async def cloak_network_intercept(
+        async def browser_network_intercept(
             page_id: str,
             url_pattern: str,
             action: str = "block",
@@ -748,12 +928,12 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
             )
 
         @mcp.tool()
-        async def cloak_network_continue(page_id: str, url_pattern: str) -> dict[str, Any]:
+        async def browser_network_continue(page_id: str, url_pattern: str) -> dict[str, Any]:
             """Remove a network interception rule.
 
             Args:
                 page_id: Target page ID.
-                url_pattern: Same pattern used in cloak_network_intercept.
+                url_pattern: Same pattern used in browser_network_intercept.
             """
             page = _session.get_page(page_id)
             return await _safe(remove_intercept, page, page_id, url_pattern)
@@ -761,7 +941,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     if "cookies" in _capabilities or "all" in _capabilities:
 
         @mcp.tool()
-        async def cloak_get_cookies(page_id: str) -> dict[str, Any]:
+        async def browser_get_cookies(page_id: str) -> dict[str, Any]:
             """Get all cookies from the page's browser context.
 
             Args:
@@ -771,7 +951,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
             return await _safe(_get_cookies, page)
 
         @mcp.tool()
-        async def cloak_set_cookies(page_id: str, cookies: list[dict]) -> dict[str, Any]:
+        async def browser_set_cookies(page_id: str, cookies: list[dict]) -> dict[str, Any]:
             """Set cookies in the page's browser context.
 
             Args:
@@ -784,7 +964,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     if "pdf" in _capabilities or "all" in _capabilities:
 
         @mcp.tool()
-        async def cloak_pdf(
+        async def browser_pdf(
             page_id: str,
             format: str = "A4",
             print_background: bool = True,
@@ -813,7 +993,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     if "console" in _capabilities or "all" in _capabilities:
 
         @mcp.tool()
-        async def cloak_console(page_id: str, clear: bool = False) -> dict[str, Any]:
+        async def browser_console(page_id: str, clear: bool = False) -> dict[str, Any]:
             """Get browser console output (log/warn/error/info) and JS errors.
 
             Args:
@@ -828,7 +1008,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
     if "downloads" in _capabilities or "all" in _capabilities:
 
         @mcp.tool()
-        async def cloak_downloads(page_id: str) -> dict[str, Any]:
+        async def browser_downloads(page_id: str) -> dict[str, Any]:
             """Get list of files downloaded by the browser on a page.
 
             Returns downloaded file info including suggested filenames and local paths.
@@ -854,12 +1034,12 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         """
         return (
             f"Use CloakBrowser to visit {url} and extract: {what}\n\n"
-            "1. cloak_launch()\n"
-            "2. cloak_navigate(page_id, url)\n"
-            "3. cloak_snapshot(page_id) to see structure\n"
-            "4. cloak_read_page(page_id) to get markdown content\n"
+            "1. browser_launch()\n"
+            "2. browser_navigate(page_id, url)\n"
+            "3. browser_snapshot(page_id) to see structure\n"
+            "4. browser_read_page(page_id) to get markdown content\n"
             "5. Extract the requested information\n"
-            "6. cloak_close()\n"
+            "6. browser_close()\n"
         )
 
     @mcp.prompt()
@@ -873,14 +1053,14 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         return (
             f"Use CloakBrowser to fill a form at {url}\n"
             f"Instructions: {instructions}\n\n"
-            "1. cloak_launch()\n"
-            "2. cloak_navigate(page_id, url)\n"
-            "3. cloak_snapshot(page_id) to see form fields with ref IDs\n"
-            "4. cloak_type(page_id, ref, value) for each field\n"
-            "5. cloak_screenshot(page_id) to verify before submit\n"
-            "6. cloak_click(page_id, submit_ref) to submit\n"
-            "7. cloak_read_page(page_id) to see result\n"
-            "8. cloak_close()\n"
+            "1. browser_launch()\n"
+            "2. browser_navigate(page_id, url)\n"
+            "3. browser_snapshot(page_id) to see form fields with ref IDs\n"
+            "4. browser_type(page_id, ref, value) for each field\n"
+            "5. browser_screenshot(page_id) to verify before submit\n"
+            "6. browser_click(page_id, submit_ref) to submit\n"
+            "7. browser_read_page(page_id) to see result\n"
+            "8. browser_close()\n"
         )
 
     @mcp.prompt()
@@ -894,13 +1074,13 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
         """
         return (
             f"Use CloakBrowser to log into {url}\n\n"
-            "1. cloak_launch()  # stealth + humanize ON by default\n"
-            "2. cloak_navigate(page_id, url)\n"
-            "3. cloak_snapshot(page_id) to find username/password fields\n"
-            f"4. cloak_type(page_id, username_ref, '{username or '[ask]'}')\n"
-            f"5. cloak_type(page_id, password_ref, '{password or '[ask]'}')\n"
-            "6. cloak_click(page_id, sign_in_ref)\n"
-            "7. cloak_snapshot(page_id) to verify login succeeded\n"
+            "1. browser_launch()  # stealth + humanize ON by default\n"
+            "2. browser_navigate(page_id, url)\n"
+            "3. browser_snapshot(page_id) to find username/password fields\n"
+            f"4. browser_type(page_id, username_ref, '{username or '[ask]'}')\n"
+            f"5. browser_type(page_id, password_ref, '{password or '[ask]'}')\n"
+            "6. browser_click(page_id, sign_in_ref)\n"
+            "7. browser_snapshot(page_id) to verify login succeeded\n"
         )
 
     return mcp
@@ -911,7 +1091,7 @@ def create_server(caps: set[str] | None = None) -> FastMCP:
 # ---------------------------------------------------------------------------
 
 def main():
-    """Entry point for the cloakbrowsermcp CLI."""
+    """Entry point for the cloakbrowser-mcp CLI."""
     import argparse
 
     parser = argparse.ArgumentParser(description="CloakBrowser MCP Server")
