@@ -10,6 +10,7 @@ ANNOTATE_JS = """
   // --- Interactive element detection (mirrors snapshot.py) ---
   const INTERACTIVE_SELECTORS = [
     'a[href]', 'button', 'input', 'select', 'textarea',
+    'iframe',
     '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
     '[role="tab"]', '[role="menuitem"]', '[role="switch"]', '[role="combobox"]',
     '[role="slider"]', '[role="spinbutton"]', '[role="textbox"]',

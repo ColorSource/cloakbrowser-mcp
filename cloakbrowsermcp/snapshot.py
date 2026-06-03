@@ -63,6 +63,7 @@ SNAPSHOT_JS = """
   // --- Interactive element detection ---
   const INTERACTIVE_SELECTORS = [
     'a[href]', 'button', 'input', 'select', 'textarea',
+    'iframe',
     '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
     '[role="tab"]', '[role="menuitem"]', '[role="switch"]', '[role="combobox"]',
     '[role="slider"]', '[role="spinbutton"]', '[role="textbox"]',
@@ -243,6 +244,11 @@ SNAPSHOT_JS = """
       const href = el.getAttribute('href') || '';
       const hrefDisplay = href.length > 50 ? href.slice(0, 47) + '...' : href;
       desc = indent + ref + ' link "' + text + '"' + (FULL ? ' -> ' + hrefDisplay : '') + loadingMark;
+    } else if (tag === 'iframe') {
+      const title = el.getAttribute('title') || el.getAttribute('aria-label') || el.getAttribute('name') || '';
+      let src = el.getAttribute('src') || '';
+      if (src.length > 80) src = src.slice(0, 77) + '...';
+      desc = indent + ref + ' iframe' + (title ? ' "' + truncText(title) + '"' : '') + (FULL && src ? ' -> ' + src : '') + loadingMark;
     } else if (tag === 'img') {
       const alt = el.getAttribute('alt') || '';
       desc = indent + 'img' + (alt ? ' "' + truncText(alt) + '"' : ' [no alt]') + loadingMark;
@@ -421,6 +427,11 @@ SNAPSHOT_JS = """
       const href = el.getAttribute('href') || '';
       const hrefDisplay = href.length > 50 ? href.slice(0, 47) + '...' : href;
       desc = indent + ref + ' link "' + text + '"' + (FULL ? ' -> ' + hrefDisplay : '') + loadingMark;
+    } else if (tag === 'iframe') {
+      const title = el.getAttribute('title') || el.getAttribute('aria-label') || el.getAttribute('name') || '';
+      let src = el.getAttribute('src') || '';
+      if (src.length > 80) src = src.slice(0, 77) + '...';
+      desc = indent + ref + ' iframe' + (title ? ' "' + truncText(title) + '"' : '') + (FULL && src ? ' -> ' + src : '') + loadingMark;
     } else if (tag === 'img') {
       const alt = el.getAttribute('alt') || '';
       desc = indent + 'img' + (alt ? ' "' + truncText(alt) + '"' : ' [no alt]') + loadingMark;
