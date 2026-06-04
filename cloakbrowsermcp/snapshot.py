@@ -156,6 +156,13 @@ SNAPSHOT_JS = """
     return str;
   }
 
+  function truncIframeLabel(str) {
+    if (!str) return '';
+    str = str.replace(/\\s+/g, ' ').trim();
+    if (str.length > 24) return str.slice(0, 23) + '\u2026';
+    return str;
+  }
+
   // --- Refs collection ---
   const refs = {};
   let refCounter = 0;
@@ -245,10 +252,10 @@ SNAPSHOT_JS = """
       const hrefDisplay = href.length > 50 ? href.slice(0, 47) + '...' : href;
       desc = indent + ref + ' link "' + text + '"' + (FULL ? ' -> ' + hrefDisplay : '') + loadingMark;
     } else if (tag === 'iframe') {
-      const title = el.getAttribute('title') || el.getAttribute('aria-label') || el.getAttribute('name') || '';
+      const title = el.getAttribute('aria-label') || el.getAttribute('title') || '';
       let src = el.getAttribute('src') || '';
       if (src.length > 80) src = src.slice(0, 77) + '...';
-      desc = indent + ref + ' iframe' + (title ? ' "' + truncText(title) + '"' : '') + (FULL && src ? ' -> ' + src : '') + loadingMark;
+      desc = indent + ref + ' iframe' + (title ? ' "' + truncIframeLabel(title) + '"' : '') + (FULL && src ? ' -> ' + src : '') + loadingMark;
     } else if (tag === 'img') {
       const alt = el.getAttribute('alt') || '';
       desc = indent + 'img' + (alt ? ' "' + truncText(alt) + '"' : ' [no alt]') + loadingMark;
@@ -330,11 +337,15 @@ SNAPSHOT_JS = """
       try {
         const iframeDoc = el.contentDocument || el.contentWindow.document;
         if (iframeDoc && iframeDoc.body) {
-          lines.push(indent + '  [iframe content]');
+          const iframeTitle = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+          const iframeLabel = iframeTitle ? ' "' + truncIframeLabel(iframeTitle) + '"' : '';
+          lines.push(indent + '  [iframe content' + iframeLabel + ']');
           describeElement(iframeDoc.body, depth + 1);
         }
       } catch(e) {
-        lines.push(indent + '  [iframe: cross-origin]');
+        const iframeTitle = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        const iframeLabel = iframeTitle ? ' "' + truncIframeLabel(iframeTitle) + '"' : '';
+        lines.push(indent + '  [iframe: cross-origin' + iframeLabel + ']');
       }
     }
   }
@@ -428,10 +439,10 @@ SNAPSHOT_JS = """
       const hrefDisplay = href.length > 50 ? href.slice(0, 47) + '...' : href;
       desc = indent + ref + ' link "' + text + '"' + (FULL ? ' -> ' + hrefDisplay : '') + loadingMark;
     } else if (tag === 'iframe') {
-      const title = el.getAttribute('title') || el.getAttribute('aria-label') || el.getAttribute('name') || '';
+      const title = el.getAttribute('aria-label') || el.getAttribute('title') || '';
       let src = el.getAttribute('src') || '';
       if (src.length > 80) src = src.slice(0, 77) + '...';
-      desc = indent + ref + ' iframe' + (title ? ' "' + truncText(title) + '"' : '') + (FULL && src ? ' -> ' + src : '') + loadingMark;
+      desc = indent + ref + ' iframe' + (title ? ' "' + truncIframeLabel(title) + '"' : '') + (FULL && src ? ' -> ' + src : '') + loadingMark;
     } else if (tag === 'img') {
       const alt = el.getAttribute('alt') || '';
       desc = indent + 'img' + (alt ? ' "' + truncText(alt) + '"' : ' [no alt]') + loadingMark;
@@ -505,11 +516,15 @@ SNAPSHOT_JS = """
       try {
         const iframeDoc = el.contentDocument || el.contentWindow.document;
         if (iframeDoc && iframeDoc.body) {
-          lines.push(indent + '  [iframe content]');
+          const iframeTitle = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+          const iframeLabel = iframeTitle ? ' "' + truncIframeLabel(iframeTitle) + '"' : '';
+          lines.push(indent + '  [iframe content' + iframeLabel + ']');
           describeElementSkipModals(iframeDoc.body, depth + 1);
         }
       } catch(e) {
-        lines.push(indent + '  [iframe: cross-origin]');
+        const iframeTitle = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        const iframeLabel = iframeTitle ? ' "' + truncIframeLabel(iframeTitle) + '"' : '';
+        lines.push(indent + '  [iframe: cross-origin' + iframeLabel + ']');
       }
     }
   }
